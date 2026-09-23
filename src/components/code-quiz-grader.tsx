@@ -399,40 +399,27 @@ export function CodeQuizGrader() {
       : "Quiz engine: on-device fallback (Ollama optional)"
     : null;
 
-  const displayFont = { fontFamily: "var(--font-display), sans-serif" };
-
   return (
     <div className="mx-auto max-w-xl px-4 py-12 sm:py-16">
       <header className="mb-10">
-        <p
-          className="text-[0.7rem] font-bold uppercase tracking-[0.22em] text-[var(--signal)]"
-          style={displayFont}
-        >
-          Preflight
-        </p>
+        <p className="text-sm font-medium text-[var(--ink-3)]">Preflight</p>
         {course && (
           <p className="mt-2 text-sm text-[var(--ink-2)]">
             {course.assignmentTitle}
             {course.isDevSim ? " · pilot" : ""}
           </p>
         )}
-        <h1
-          className="mt-4 text-[2rem] font-extrabold leading-tight tracking-tight text-[var(--ink)] sm:text-[2.35rem]"
-          style={displayFont}
-        >
+        <h1 className="mt-3 text-[1.75rem] font-semibold tracking-tight text-[var(--ink)] sm:text-[2rem]">
           Before you submit
         </h1>
-        <p className="mt-3 text-[1.05rem] leading-relaxed text-[var(--ink-2)]">
+        <p className="mt-3 text-base leading-relaxed text-[var(--ink-2)]">
           Upload your code, answer a few questions about what you wrote, then
           mark complete when you score 100%.
         </p>
         {ollamaLine && (
-          <p className="mt-4 text-xs text-[var(--ink-3)]">{ollamaLine}</p>
+          <p className="mt-3 text-xs text-[var(--ink-3)]">{ollamaLine}</p>
         )}
-        <p
-          className="mt-6 text-[11px] font-semibold uppercase tracking-wider text-[var(--ink-3)]"
-          aria-current="step"
-        >
+        <p className="mt-6 text-sm text-[var(--ink-3)]" aria-current="step">
           {STEP_LABELS[step]}
         </p>
       </header>
@@ -538,7 +525,7 @@ export function CodeQuizGrader() {
             )}
             {(quizData.mc?.length ?? 0) > 0 && (
               <>
-                <div className="mb-3 text-[11px] font-bold uppercase tracking-wider text-[var(--sky)]">
+                <div className="mb-3 text-sm font-medium text-[var(--ink-3)]">
                   Multiple-choice
                 </div>
                 {quizData.mc.map((q, i) => (
@@ -555,8 +542,8 @@ export function CodeQuizGrader() {
                             className={cn(
                               "flex cursor-pointer items-start gap-2.5 rounded-lg border px-3.5 py-2.5 transition-colors",
                               chosen
-                                ? "border-[var(--signal)] bg-[var(--green-soft)]"
-                                : "border-[var(--line)] hover:border-[color-mix(in_srgb,var(--signal)_45%,var(--line))]",
+                                ? "border-[var(--ink)] bg-[#f5f5f5]"
+                                : "border-[var(--line)] hover:border-[var(--line-2)]",
                             )}
                           >
                             <input
@@ -566,7 +553,7 @@ export function CodeQuizGrader() {
                               onChange={() =>
                                 setMcChosen((prev) => ({ ...prev, [i]: k }))
                               }
-                              className="mt-0.5 accent-[var(--signal)]"
+                              className="mt-0.5 accent-black"
                             />
                             <span className="text-sm">
                               <strong>{k}.</strong> {q.options[k]}
@@ -581,7 +568,7 @@ export function CodeQuizGrader() {
             )}
             {(quizData.fa?.length ?? 0) > 0 && (
               <>
-                <div className="mb-3 mt-6 text-[11px] font-bold uppercase tracking-wider text-[var(--signal)]">
+                <div className="mb-3 mt-6 text-sm font-medium text-[var(--ink-3)]">
                   Free-answer
                 </div>
                 {quizData.fa.map((q, i) => (
@@ -599,7 +586,7 @@ export function CodeQuizGrader() {
                           [i]: e.target.value,
                         }))
                       }
-                      className="min-h-[96px] border-[var(--line-2)] bg-[#101820] text-sm"
+                      className="min-h-[96px] text-sm"
                     />
                   </div>
                 ))}
@@ -620,7 +607,6 @@ export function CodeQuizGrader() {
               variant="outline"
               disabled={busy}
               onClick={resetAll}
-              className="border-[var(--line-2)] bg-transparent"
             >
               Different files
             </Button>
