@@ -62,9 +62,10 @@ export default function PilotPage() {
           iCollege launch simulator
         </h1>
         <p className="mb-8 text-[1.02rem] leading-relaxed text-[var(--ink-2)]">
-          Pretend you clicked the assignment inside iCollege. This posts an LTI
-          launch to the tool, then opens the student quiz with course context —
-          no Ollama, no cloud LLM, no public-site framing.
+          Pretend a student clicked the assignment link in iCollege before
+          submitting their lab. This launches the understanding check with
+          course context — pass at 100%, mark complete, then they’re cleared
+          to submit the real assignment.
         </p>
 
         <div className="cqg-card space-y-4">

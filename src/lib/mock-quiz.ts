@@ -17,6 +17,9 @@ export type CodeSummary = {
   methodHints: string[];
   raiseHints: string[];
   imports: string[];
+  typeHints: string[];
+  formatHints: string[];
+  stringHints: string[];
   fingerprint: string;
 };
 
@@ -104,11 +107,43 @@ export function summarizeCode(files: SourceFile[]): CodeSummary {
       ),
   ).slice(0, 8);
 
+  const typeHints = unique(
+    [...blob.matchAll(/\b((?:u?int|float|double|char|size_t|int8_t|uint8_t|int16_t|uint16_t|int32_t|uint32_t)\w*)\b/g)].map(
+      (m) => m[1],
+    ),
+  ).slice(0, 8);
+
+  const formatHints = unique(
+    [...blob.matchAll(/%(?:0?\d*)?[diouxXeEfFgGcs%]/g)].map((m) => m[0]),
+  ).slice(0, 6);
+
+  const stringHints = unique(
+    [...blob.matchAll(/"([^"\\]{3,60})"/g)].map((m) => m[1]),
+  ).slice(0, 4);
+
   const methodHints = unique(
     [...blob.matchAll(/\.([A-Za-z_][A-Za-z0-9_]*)\s*\(/g)]
       .map((m) => m[1])
       .filter((n) => n.length > 2 && !["push", "pop", "log", "print"].includes(n)),
   ).slice(0, 6);
+
+  // C library calls like printf(
+  const callHints = unique(
+    [...blob.matchAll(/\b([A-Za-z_][A-Za-z0-9_]*)\s*\(/g)]
+      .map((m) => m[1])
+      .filter(
+        (n) =>
+          ![
+            "if",
+            "for",
+            "while",
+            "switch",
+            "return",
+            "sizeof",
+            "main",
+          ].includes(n),
+      ),
+  ).slice(0, 8);
 
   const raiseHints = unique(
     [...blob.matchAll(/\b(?:raise|throw)\s+([A-Za-z_][A-Za-z0-9_]*)/g)].map(
@@ -121,11 +156,17 @@ export function summarizeCode(files: SourceFile[]): CodeSummary {
       ...blob.matchAll(/^\s*import\s+([A-Za-z0-9_./*-]+)/gm),
       ...blob.matchAll(/^\s*from\s+([A-Za-z0-9_.]+)\s+import/gm),
       ...blob.matchAll(/require\(\s*['"]([^'"]+)['"]\s*\)/g),
+      ...blob.matchAll(/#\s*include\s*[<"]([^>"]+)[>"]/g),
     ].map((m) => m[1]),
   ).slice(0, 6);
 
   const primarySymbol =
-    classNames[0] || defNames[0] || primary?.name.replace(/\.[^.]+$/, "") || "the program";
+    classNames[0] ||
+    defNames[0] ||
+    callHints[0] ||
+    typeHints[0] ||
+    primary?.name.replace(/\.[^.]+$/, "") ||
+    "the program";
 
   return {
     names,
@@ -141,9 +182,12 @@ export function summarizeCode(files: SourceFile[]): CodeSummary {
     primarySymbol,
     classNames,
     defNames,
-    methodHints,
+    methodHints: unique([...methodHints, ...callHints]).slice(0, 8),
     raiseHints,
     imports,
+    typeHints,
+    formatHints,
+    stringHints,
     fingerprint: `${names}|${blob.slice(0, 4000)}`,
   };
 }
@@ -156,122 +200,157 @@ type McBuilder = (s: CodeSummary) => {
 
 const MC_BUILDERS: McBuilder[] = [
   (s) => ({
-    question: `In \`${s.primaryName}\`, what is \`${s.primarySymbol}\` mainly responsible for?`,
+    question: `What is \`${s.primaryName}\` mainly demonstrating or computing?`,
     options: {
-      A: `Core behavior for \`${s.primarySymbol}\` as defined in your uploaded ${s.lang} code`,
-      B: "Launching a separate GUI window toolkit",
-      C: "Compiling the operating system kernel",
-      D: "Encrypting TLS certificates for a CDN",
+      A:
+        s.typeHints.some((t) => /int8|uint8/i.test(t)) ||
+        /complement/i.test(s.primaryName)
+          ? "How a signed integer value is stored/shown (including bit pattern / two's complement ideas)"
+          : `The core logic defined in the uploaded ${s.lang} source`,
+      B: "Setting up a production database schema",
+      C: "Training a neural network offline",
+      D: "Parsing HTML for a web browser",
     },
     answer: "A",
   }),
   (s) => {
+    const typ = s.typeHints.find((t) => /int8_t|uint8_t|int16|uint16/.test(t));
+    if (typ) {
+      return {
+        question: `Why does \`${s.primaryName}\` use \`${typ}\`?`,
+        options: {
+          A: `\`${typ}\` fixes the width/signedness of the value so the bit pattern is well-defined`,
+          B: `\`${typ}\` is required by every C program's linker`,
+          C: `\`${typ}\` disables printf entirely`,
+          D: `\`${typ}\` converts the file into Python`,
+        },
+        answer: "A" as const,
+      };
+    }
     const sym = s.defNames[0] || s.methodHints[0] || s.primarySymbol;
     return {
       question: `Which claim about \`${sym}\` in \`${s.primaryName}\` is most accurate?`,
       options: {
-        A: s.defNames.includes(sym) || s.methodHints.includes(sym)
-          ? `\`${sym}\` is a function/method your program defines or calls as part of its logic`
-          : `\`${sym}\` is a central symbol in the uploaded submission`,
-        B: `\`${sym}\` is a built-in CPU instruction that cannot appear in source`,
-        C: `\`${sym}\` only exists in binary firmware blobs`,
-        D: `\`${sym}\` is reserved for database migration tools`,
+        A: `\`${sym}\` appears in your upload and participates in the program's behavior`,
+        B: `\`${sym}\` is ignored by the compiler and never runs`,
+        C: `\`${sym}\` only exists in comments`,
+        D: `\`${sym}\` replaces the operating system`,
       },
-      answer: "A",
+      answer: "A" as const,
+    };
+  },
+  (s) => {
+    const fmt =
+      s.formatHints.find((f) => /X|x/.test(f)) || s.formatHints[0];
+    if (fmt && s.methodHints.includes("printf")) {
+      return {
+        question: `In \`${s.primaryName}\`, what does the printf format \`${fmt}\` help show?`,
+        options: {
+          A: /X|x/.test(fmt)
+            ? "A hexadecimal view of the byte/bit pattern"
+            : "A formatted value printed to the console",
+          B: "A network packet checksum only",
+          C: "A random password",
+          D: "The name of the source file on disk",
+        },
+        answer: "A" as const,
+      };
+    }
+    return {
+      question: `How does control flow work in \`${s.primaryName}\`?`,
+      options: {
+        A: s.hasCond
+          ? "It uses conditionals to choose behavior from inputs or state"
+          : "It mostly runs top-to-bottom with little branching",
+        B: "It waits forever for keyboard input inside an infinite loop",
+        C: "It never reaches return / exit",
+        D: "It only runs when a GPU is attached",
+      },
+      answer: "A" as const,
+    };
+  },
+  (s) => {
+    if (
+      s.methodHints.includes("printf") &&
+      /uint8_t|int8_t/.test(s.typeHints.join(","))
+    ) {
+      return {
+        question: `Why cast through \`uint8_t\` (or similar) before printing hex in \`${s.primaryName}\`?`,
+        options: {
+          A: "So the printed hex shows the raw 8-bit pattern, not a sign-extended wider int",
+          B: "Because printf cannot print decimal values otherwise",
+          C: "Because `#include <stdio.h>` requires it for every program",
+          D: "To convert the program into assembly automatically",
+        },
+        answer: "A" as const,
+      };
+    }
+    return {
+      question: `How does \`${s.primaryName}\` handle repeated work?`,
+      options: {
+        A: s.hasLoop
+          ? "It iterates over data or repeats steps with loops/helpers"
+          : "It tends to do its work once without looping over a collection",
+        B: "It spawns a new process for every character printed",
+        C: "It stores all results only in browser cookies",
+        D: "It never executes any of the uploaded statements",
+      },
+      answer: "A" as const,
     };
   },
   (s) => ({
-    question: `How does control flow work in \`${s.primaryName}\`?`,
+    question: s.hasRaise
+      ? `What does error handling look like around \`${s.primarySymbol}\`?`
+      : `Which edge case should a careful reader consider for \`${s.primaryName}\`?`,
     options: {
-      A: s.hasCond
-        ? "It uses conditionals (`if` / branches) to choose behavior from inputs or state"
-        : "It mostly follows a straight-line path with little branching",
-      B: "It only spins forever waiting on a GPU shader",
-      C: "It never returns from any function",
-      D: "It requires a blockchain consensus round each line",
+      A: s.hasRaise
+        ? "Invalid inputs can raise/throw and abort the happy path"
+        : s.typeHints.some((t) => /int8/.test(t))
+          ? "Extreme values (e.g. most-negative `int8_t`) and how they print as signed vs bits"
+          : "Unexpected inputs or values the happy path may not cover",
+      B: "Whether the source file is saved as a PDF",
+      C: "Whether the CPU brand logo is visible",
+      D: "Whether the room lights are on",
     },
     answer: "A",
   }),
   (s) => ({
-    question: `How does \`${s.primaryName}\` handle repeated work?`,
+    question: `Which statement best describes \`${s.primaryName}\`?`,
     options: {
-      A: s.hasLoop
-        ? "It iterates (loops / collection helpers) over data or repeated steps"
-        : "It tends to do work once rather than iterating collections",
-      B: "It forks a new OS process for every character",
-      C: "It stores results only in browser cookies",
-      D: "It never executes user-defined logic",
+      A: `It is the submitted ${s.lang} source the quiz is about`,
+      B: "It is an encrypted disk image",
+      C: "It is only a markdown README",
+      D: "It contains no runnable statements",
     },
     answer: "A",
   }),
   (s) => {
-    const err = s.raiseHints[0];
+    const call = s.methodHints[0] || s.primarySymbol;
     return {
-      question: s.hasRaise
-        ? `What does error handling look like around \`${s.primarySymbol}\`?`
-        : `Which edge case should a careful reader consider for \`${s.primaryName}\`?`,
+      question: `What is the role of \`${call}\` in \`${s.primaryName}\`?`,
       options: {
-        A: s.hasRaise
-          ? err
-            ? `It can raise/throw \`${err}\` (or similar) when inputs are invalid`
-            : "It raises/throws on invalid or unexpected conditions"
-          : "Empty, null, or unexpected inputs that the happy path may not cover",
-        B: "Whether the sun is rising in the southern hemisphere",
-        C: "Whether the file is printed on glossy paper",
-        D: "Whether the CPU supports 8-bit audio codecs",
+        A:
+          call === "printf"
+            ? "It prints formatted output so you can observe the value / bit pattern"
+            : `\`${call}\` participates in the program's observable behavior`,
+        B: `\`${call}\` deletes the source file after running`,
+        C: `\`${call}\` opens a GUI window toolkit`,
+        D: `\`${call}\` is never reached`,
       },
-      answer: "A",
-    };
-  },
-  (s) => ({
-    question: `Which statement best describes the uploaded files (${s.names})?`,
-    options: {
-      A:
-        s.fileList.length > 1
-          ? `Together they form the submitted ${s.lang} program the quiz is about`
-          : `\`${s.primaryName}\` is the submitted ${s.lang} source under review`
-      ,
-      B: "They are encrypted disk images for a hypervisor",
-      C: "They are unrelated markdown style guides",
-      D: "They only contain binary machine code",
-    },
-    answer: "A",
-  }),
-  (s) => {
-    const other =
-      s.defNames.find((d) => d !== s.primarySymbol) ||
-      s.classNames.find((c) => c !== s.primarySymbol) ||
-      null;
-    return {
-      question: other
-        ? `How do \`${s.primarySymbol}\` and \`${other}\` relate in this submission?`
-        : `How is logic organized in \`${s.primaryName}\`?`,
-      options: {
-        A: other
-          ? `Both appear in your upload; understanding one helps explain how \`${other}\` fits the overall design`
-          : s.hasFn
-            ? "Logic is organized into functions, methods, or classes you can reason about separately"
-            : "Most logic sits at top level rather than deep class hierarchies",
-        B: "They are guaranteed lock-free on every platform",
-        C: "They cannot be read by humans",
-        D: "They replace the operating system kernel",
-      },
-      answer: "A",
+      answer: "A" as const,
     };
   },
   (s) => ({
     question: s.hasImport
-      ? `What role do imports play near the top of \`${s.primaryName}\`?`
-      : `What would improve maintainability of \`${s.primaryName}\`?`,
+      ? `Why does \`${s.primaryName}\` include headers/imports such as \`${s.imports[0] || "its libraries"}\`?`
+      : `What would improve clarity in \`${s.primaryName}\`?`,
     options: {
       A: s.hasImport
-        ? s.imports[0]
-          ? `They bring in helpers such as \`${s.imports[0]}\` (and similar) that the program relies on`
-          : "They pull in libraries/modules the program depends on"
-        : "Clear naming, focused functions, and comments for non-obvious intent",
-      B: "They delete all identifiers at runtime",
-      C: "They hard-code secrets into every function",
-      D: "They duplicate the entire file for each feature",
+        ? "They provide declarations (e.g. printf / fixed-width types) the code calls"
+        : "Clear naming and comments for non-obvious casts or formats",
+      B: "They remove the need for a `main` function",
+      C: "They hard-code secrets into every line",
+      D: "They duplicate the entire file for each print",
     },
     answer: "A",
   }),
@@ -281,27 +360,30 @@ type FaBuilder = (s: CodeSummary) => string;
 
 const FA_BUILDERS: FaBuilder[] = [
   (s) =>
-    `In your own words, explain what \`${s.primarySymbol}\` in \`${s.primaryName}\` is trying to accomplish and why that matters.`,
+    s.typeHints.some((t) => /int8|uint8/.test(t)) ||
+    /complement/i.test(s.primaryName)
+      ? `In \`${s.primaryName}\`, explain what happens when the signed value is printed with \`%d\` versus when its bits are shown in hex. Why are both useful?`
+      : `In your own words, explain what \`${s.primaryName}\` is trying to accomplish.`,
   (s) =>
-    `Walk through the main path in \`${s.primaryName}\`. What happens step by step when this ${s.lang} program runs?`,
+    `Walk through \`${s.primaryName}\` line by line. What is stored in the important variable(s), and what gets printed?`,
   (s) =>
-    s.defNames.length
-      ? `Pick one of these symbols from your upload (\`${s.defNames.slice(0, 3).join("`, `")}\`) and explain how it is used.`
-      : `Identify one important variable or data structure in \`${s.primaryName}\` and explain how it is used.`,
+    s.methodHints.includes("printf")
+      ? `Explain why the code uses the printf formats it does (e.g. ${
+          s.formatHints.map((f) => `\`${f}\``).join(", ") || "`%d` / hex"
+        }). What would go wrong with a careless format?`
+      : s.defNames.length
+        ? `Pick one of these symbols (\`${s.defNames.slice(0, 3).join("`, `")}\`) and explain how it is used.`
+        : `Identify one important variable in \`${s.primaryName}\` and explain how it is used.`,
   (s) =>
-    s.hasRaise
-      ? `Describe when \`${s.primarySymbol}\` fails or raises, and how the code signals that to the caller.`
+    s.typeHints.includes("int8_t")
+      ? `What is special about values like \`-128\` for \`int8_t\`? How does that relate to what this program is exploring?`
       : `Describe an edge case for \`${s.primarySymbol}\` and how the code handles (or fails to handle) it.`,
   (s) =>
-    `If you were reviewing this submission, what one clarity or design improvement would you suggest for \`${s.primaryName}\` and why?`,
+    `If a classmate only skimmed \`${s.primaryName}\`, what one idea must they understand to explain its output correctly?`,
   (s) =>
-    s.fileList.length > 1
-      ? `How do these files work together: ${s.fileList.map((n) => `\`${n}\``).join(", ")}?`
-      : `What would a classmate need to know about \`${s.primaryName}\` to use \`${s.primarySymbol}\` correctly?`,
-  (s) =>
-    s.methodHints.length
-      ? `Explain how a call like \`.${s.methodHints[0]}(...)\` fits into the behavior of \`${s.primarySymbol}\`.`
-      : `Point to one concrete line of logic in \`${s.primaryName}\` and explain why it is necessary.`,
+    s.stringHints[0]
+      ? `The program prints text like "${s.stringHints[0]}…". What value is being shown there, and how is it computed/cast?`
+      : `Point to one concrete cast or conversion in \`${s.primaryName}\` and explain why it is necessary.`,
 ];
 
 /** Local on-device quiz generation — no cloud, no Ollama, no API keys. */

@@ -177,7 +177,7 @@ const STOP = new Set(
   ].map((s) => s.toLowerCase()),
 );
 
-/** Tokens that questions must honestly reference from THIS upload. */
+/** High-value tokens questions must honestly reference from THIS upload. */
 export function uploadGroundTokens(files: SourceFile[]): Set<string> {
   const s = summarizeCode(files);
   const tokens = new Set<string>();
@@ -191,14 +191,11 @@ export function uploadGroundTokens(files: SourceFile[]): Set<string> {
     ...s.defNames,
     ...s.methodHints,
     ...s.raiseHints,
+    ...s.typeHints,
+    ...s.formatHints,
+    ...s.imports,
   ]) {
     if (x && x.length > 1) tokens.add(x.toLowerCase());
-  }
-  // Pull more identifiers from source
-  const blob = files.map((f) => f.content).join("\n");
-  for (const m of blob.matchAll(/\b([A-Za-z_][A-Za-z0-9_]{2,})\b/g)) {
-    const t = m[1].toLowerCase();
-    if (!STOP.has(t)) tokens.add(t);
   }
   return tokens;
 }
@@ -253,11 +250,13 @@ export function buildGeneratePrompt(
     `Each fa object: id, question.\n` +
     `CRITICAL:\n` +
     `- Ask ONLY about symbols/files from THIS upload (${fileNames}).\n` +
+    `- Focus on what the program is teaching/doing (types, casts, formats, control flow, edge values) — not generic "what is printf" trivia repeated 4 times.\n` +
+    `- Each question must be DISTINCT (no near-duplicates).\n` +
     `- Do NOT mention GradeBook, add_score, letter_grade, or any other program not in the upload.\n` +
-    `- Do NOT copy sample questions from elsewhere — invent questions from the code above.\n` +
-    `- Wrong options must be plausible mistakes about THIS code (no jokes/blockchain/GPU).\n` +
+    `- Do NOT use joke distractors (no blockchain, GPU shaders, firmware blobs, sunscreen).\n` +
+    `- Wrong options must be plausible mistakes about THIS code.\n` +
     `Shape reminder (replace with content about ${exSym} / ${exFile}):\n` +
-    `{"mc":[{"id":1,"question":"What is the role of ${exSym} in ${exFile}?","options":{"A":"...","B":"...","C":"...","D":"..."},"answer":"A"}],"fa":[{"id":2,"question":"Explain how ${exSym} works in ${exFile}."}]}\n` +
+    `{"mc":[{"id":1,"question":"In ${exFile}, why is ${exSym} used the way it is?","options":{"A":"...","B":"...","C":"...","D":"..."},"answer":"A"}],"fa":[{"id":2,"question":"Walk through ${exFile} and explain the printed output."}]}\n` +
     `Output ONLY the JSON object.`
   );
 }
@@ -377,13 +376,14 @@ export function coerceQuiz(
 
   const keepText = (text: string) => {
     const lower = text.toLowerCase();
-    // Reject classic prompt-leak names when they aren't in the upload
-    for (const leak of [
-      "gradebook",
-      "add_score",
-      "letter_grade",
-      "class_average",
-    ]) {
+    if (
+      /blockchain|gpu shader|firmware blobs|southern hemisphere|glossy paper|database migration tools/.test(
+        lower,
+      )
+    ) {
+      return false;
+    }
+    for (const leak of ["gradebook", "add_score", "letter_grade", "class_average"]) {
       if (lower.includes(leak) && !blob.includes(leak)) return false;
     }
     return textGroundedInUpload(text, ground);

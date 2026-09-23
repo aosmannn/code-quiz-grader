@@ -61,7 +61,7 @@ function fmtBytes(b: number) {
 }
 
 function ProgressTrack({ step }: { step: Step }) {
-  const labels = ["Upload", "Quiz", "Results", "Turn in"] as const;
+  const labels = ["Upload", "Quiz", "Results", "Clear submit"] as const;
   return (
     <div className="mb-8 hidden items-center sm:flex">
       {labels.map((label, idx) => {
@@ -360,7 +360,7 @@ export function CodeQuizGrader() {
           ok: true,
           mode: "stub",
           message:
-            "Marked complete on this device. Open from iCollege (or /pilot) to attach a course session for grade passback.",
+            "Check marked complete on this device. Open from the assignment link (iCollege or /try) so the course can record that you’re cleared to submit.",
           completionId,
           submittedAt,
           gradePassback: { scoreGiven: 100, scoreMaximum: 100 },
@@ -434,7 +434,9 @@ export function CodeQuizGrader() {
     <div className="mx-auto max-w-[720px] px-4 pb-24 pt-10 sm:pt-14">
       <header className="cqg-hero-mark mb-8">
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <span className="cqg-trust">Course assignment · runs on your laptop</span>
+          <span className="cqg-trust">
+            Pre-submit check · click from your assignment
+          </span>
           {ollama?.ok && ollama.selected ? (
             <span className="rounded-full border border-[var(--line)] bg-[var(--sky-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--sky)]">
               Using local model: {ollama.selected}
@@ -496,12 +498,13 @@ export function CodeQuizGrader() {
           className="mb-2 text-[2.05rem] leading-[1.1] font-semibold tracking-tight text-[var(--ink)] sm:text-[2.4rem]"
           style={{ fontFamily: "var(--font-display), serif" }}
         >
-          Code understanding check
+          Before you submit
         </h1>
         <p className="max-w-xl text-[1.02rem] leading-relaxed text-[var(--ink-2)]">
-          Upload the program you wrote. We’ll build a short quiz from{" "}
-          <em>your</em> code. Get every question right to turn it in — miss any
-          and you can try a fresh quiz, no penalty.
+          Upload the program for this assignment. We’ll build a short quiz from{" "}
+          <em>your</em> code. Pass at 100% to unlock turn-in — then go submit
+          the real lab. Miss any question and you can try a fresh quiz, no
+          penalty.
         </p>
       </header>
 
@@ -720,12 +723,14 @@ export function CodeQuizGrader() {
         <section>
           <div className="cqg-card">
             <div className="cqg-card-title">
-              {perfect ? "Perfect — ready to turn in" : "Not quite yet"}
+              {perfect
+                ? "Perfect — you’re cleared to submit"
+                : "Not quite yet"}
             </div>
             <p className="cqg-card-sub">
               {perfect
-                ? "You got every question right. Turn this in to your course when you’re ready."
-                : "You need every answer correct to complete this assignment. Try a fresh quiz — no penalty."}
+                ? "You got every question right. Mark this check complete, then submit your real assignment in iCollege."
+                : "You need every answer correct before you can submit the lab. Try a fresh quiz — no penalty."}
             </p>
             <div className="mb-5 rounded-2xl border border-[var(--line)] bg-[var(--paper)]/70 px-4 py-4">
               <div className="flex flex-wrap items-end justify-between gap-2">
@@ -794,7 +799,7 @@ export function CodeQuizGrader() {
                 disabled={busy}
                 onClick={() => void turnIn()}
               >
-                I&apos;m ready to turn in
+                Mark check complete
               </Button>
             ) : (
               <Button
@@ -823,14 +828,14 @@ export function CodeQuizGrader() {
       {step === 4 && submitResult && (
         <section>
           <div className="cqg-card">
-            <div className="cqg-card-title">Submitted to course</div>
+            <div className="cqg-card-title">Check complete</div>
             <p className="cqg-card-sub">{submitResult.message}</p>
             <div className="rounded-2xl border border-[color-mix(in_srgb,var(--green)_30%,var(--line))] bg-[var(--green-soft)] px-4 py-4">
               <div
                 className="text-2xl font-semibold"
                 style={{ fontFamily: "var(--font-display), serif" }}
               >
-                100% understanding
+                Cleared to submit your assignment
               </div>
               <div className="mt-2 text-sm text-[var(--ink-2)]">
                 Completion ID{" "}

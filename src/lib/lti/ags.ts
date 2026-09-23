@@ -66,8 +66,8 @@ export async function submitScoreToCourse(
     ok: true,
     mode: "stub",
     message: session.isDevSim
-      ? "Submitted to course (pilot simulator). When registered in iCollege, this posts the score via LTI AGS."
-      : "Submitted to course. Grade passback is stubbed until AGS credentials are configured.",
+      ? "Understanding check marked complete (pilot). In iCollege this records the pass so the student can submit the real assignment."
+      : "Understanding check marked complete. Grade passback is stubbed until AGS credentials are configured — then this unlocks/records submit eligibility.",
     completionId,
     submittedAt,
     gradePassback,
