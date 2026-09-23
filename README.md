@@ -2,7 +2,7 @@
 
 Students open this from **iCollege (D2L)** as a course assignment — not a public website.
 
-**Flow:** upload code → quiz auto-builds from your symbols → get **100%** → turn in to the course. Miss any question → try a fresh quiz (no penalty). **No Ollama, no cloud LLM, no API keys, no student installs.**
+**Flow:** upload code → quiz auto-builds from your symbols (via **Ollama** on the host when available) → get **100%** → turn in to the course. Miss any question → try a fresh quiz (no penalty). **No cloud LLM / API keys.** Students don’t install Ollama — the course host runs it for the pilot.
 
 ## Try tonight (localhost)
 

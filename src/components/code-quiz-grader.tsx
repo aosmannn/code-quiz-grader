@@ -34,6 +34,14 @@ type CourseSession = {
   returnUrl?: string;
 };
 
+type OllamaStatus = {
+  ok: boolean;
+  models: string[];
+  selected: string | null;
+  message: string;
+  pullHint: string;
+};
+
 type SubmitResult = {
   ok: boolean;
   mode: "ags" | "stub";
@@ -98,6 +106,10 @@ function ProgressTrack({ step }: { step: Step }) {
 export function CodeQuizGrader() {
   const [step, setStep] = useState<Step>(1);
   const [course, setCourse] = useState<CourseSession | null>(null);
+  const [ollama, setOllama] = useState<OllamaStatus | null>(null);
+  const [quizMode, setQuizMode] = useState<"ollama" | "local" | null>(null);
+  const [modelUsed, setModelUsed] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [files, setFiles] = useState<
     { name: string; size: number; content: string }[]
@@ -118,7 +130,24 @@ export function CodeQuizGrader() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const autoGenLock = useRef(false);
 
+  const refreshOllama = useCallback(async () => {
+    try {
+      const res = await fetch("/api/ollama/status");
+      const data = (await res.json()) as OllamaStatus;
+      setOllama(data);
+    } catch {
+      setOllama({
+        ok: false,
+        models: [],
+        selected: null,
+        message: "Ollama isn’t reachable (is `ollama serve` running?).",
+        pullHint: "ollama pull llama3.2:1b",
+      });
+    }
+  }, []);
+
   useEffect(() => {
+    void refreshOllama();
     void (async () => {
       try {
         const res = await fetch("/api/lti/session");
@@ -137,7 +166,7 @@ export function CodeQuizGrader() {
         /* ok without launch */
       }
     })();
-  }, []);
+  }, [refreshOllama]);
 
   const sourceFiles: SourceFile[] = useMemo(
     () => files.map((f) => ({ name: f.name, content: f.content })),
@@ -155,8 +184,13 @@ export function CodeQuizGrader() {
       if (fileList.length === 0 || autoGenLock.current) return;
       autoGenLock.current = true;
       setBusy(true);
-      setBusyLabel("Building your quiz from the uploaded code…");
+      setBusyLabel(
+        ollama?.ok
+          ? `Asking ${ollama.selected} about your code…`
+          : "Building your quiz from the uploaded code…",
+      );
       setError(null);
+      setNotice(null);
       try {
         const res = await fetch("/api/generate", {
           method: "POST",
@@ -166,11 +200,15 @@ export function CodeQuizGrader() {
             mcCount: DEFAULT_MC,
             faCount: DEFAULT_FA,
             attempt: nextAttempt,
+            model: ollama?.selected || undefined,
           }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Generate failed");
         setQuizData(data.quiz as QuizData);
+        setQuizMode(data.mode === "ollama" ? "ollama" : "local");
+        setModelUsed(data.model || null);
+        if (data.notice) setNotice(data.notice);
         setAttempt(nextAttempt);
         setMcChosen({});
         setFaAnswers({});
@@ -178,6 +216,7 @@ export function CodeQuizGrader() {
         setFaResults([]);
         setFaAnswerRows([]);
         setSubmitResult(null);
+        void refreshOllama();
         go(2);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Generate failed");
@@ -187,7 +226,7 @@ export function CodeQuizGrader() {
         autoGenLock.current = false;
       }
     },
-    [go],
+    [go, ollama?.ok, ollama?.selected, refreshOllama],
   );
 
   const setFilesAndQuiz = async (
@@ -271,6 +310,9 @@ export function CodeQuizGrader() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Grade failed");
         faScored = data.fa_scores as FaScored[];
+        if (data.mode) setQuizMode(data.mode === "ollama" ? "ollama" : "local");
+        if (data.model) setModelUsed(data.model);
+        if (data.notice) setNotice(data.notice);
       }
 
       setMcResults(mcScored);
@@ -378,6 +420,9 @@ export function CodeQuizGrader() {
     setFaResults([]);
     setFaAnswerRows([]);
     setSubmitResult(null);
+    setQuizMode(null);
+    setModelUsed(null);
+    setNotice(null);
     setAttempt(0);
     setError(null);
     setBusy(false);
@@ -390,10 +435,34 @@ export function CodeQuizGrader() {
       <header className="cqg-hero-mark mb-8">
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <span className="cqg-trust">Course assignment · runs on your laptop</span>
-          <span className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink-3)]">
-            No cloud AI · no extra installs
-          </span>
+          {ollama?.ok && ollama.selected ? (
+            <span className="rounded-full border border-[var(--line)] bg-[var(--sky-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--sky)]">
+              Using local model: {ollama.selected}
+            </span>
+          ) : (
+            <span className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink-3)]">
+              On-device fallback ready
+            </span>
+          )}
         </div>
+
+        {ollama && !ollama.ok && (
+          <div className="mb-4 rounded-xl border border-[var(--line)] bg-[var(--paper)]/80 px-4 py-3 text-sm text-[var(--ink-2)]">
+            <span className="font-semibold text-[var(--ink)]">{ollama.message}</span>
+            {" · "}
+            Pull a small model:{" "}
+            <code className="rounded bg-[var(--surface)] px-1.5 py-0.5 font-mono text-[12px]">
+              {ollama.pullHint}
+            </code>
+            <button
+              type="button"
+              className="ml-2 font-semibold text-[var(--sky)] underline"
+              onClick={() => void refreshOllama()}
+            >
+              Refresh
+            </button>
+          </div>
+        )}
 
         {course ? (
           <div className="mb-5 rounded-2xl border border-[color-mix(in_srgb,var(--green)_28%,var(--line))] bg-[var(--green-soft)] px-4 py-3">
@@ -532,13 +601,21 @@ export function CodeQuizGrader() {
             <div className="cqg-card-title">
               Show what you know
               <span className="ml-2 text-base font-normal text-[var(--ink-3)]">
-                · built from your upload
+                ·{" "}
+                {quizMode === "ollama"
+                  ? `local model ${modelUsed}`
+                  : "on-device quiz"}
                 {attempt > 0 ? ` · attempt ${attempt + 1}` : ""}
               </span>
             </div>
             <p className="cqg-card-sub">
               Answer every question. You need a perfect score to turn this in.
             </p>
+            {notice && (
+              <div className="mb-4 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-[13px] text-[var(--ink-2)]">
+                {notice}
+              </div>
+            )}
             {(quizData.mc?.length ?? 0) > 0 && (
               <>
                 <div className="cqg-section-head">Multiple-choice</div>
