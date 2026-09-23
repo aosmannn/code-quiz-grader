@@ -96,7 +96,7 @@ async function handleLaunch(req: Request) {
 
   await saveLtiSession(claims);
 
-  const dest = new URL("/", cfg.toolBaseUrl);
+  const dest = new URL("/check", cfg.toolBaseUrl);
   dest.searchParams.set("launched", "1");
   if (isDev) dest.searchParams.set("pilot", "1");
 

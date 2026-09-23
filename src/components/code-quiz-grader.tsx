@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { scanSymbols } from "@/lib/symbol-scan";
 import { SAMPLE_PROGRAM } from "@/lib/sample-program";
 import type {
   FaAnswer,
@@ -15,9 +17,8 @@ import type {
 } from "@/lib/types";
 
 const ACCEPT =
-  ".py,.js,.ts,.jsx,.tsx,.java,.c,.cpp,.cs,.go,.rb,.rs,.txt,.html,.css,.php,.swift,.kt,.r,.m,.sh,.json,.xml,.yaml,.yml,.sql,.lua,.scala";
+  ".py,.js,.ts,.jsx,.tsx,.java,.c,.cpp,.cs,.go,.rb,.rs,.txt,.html,.css,.php,.swift,.kt,.r,.m,.sh,.json,.xml,.yaml,.yml,.sql,.lua,.scala,.h";
 
-/** Sensible default under the hood — students never configure this. */
 const DEFAULT_MC = 4;
 const DEFAULT_FA = 2;
 
@@ -60,47 +61,43 @@ function fmtBytes(b: number) {
   return `${(b / 1048576).toFixed(1)} MB`;
 }
 
-function ProgressTrack({ step }: { step: Step }) {
-  const labels = ["Upload", "Quiz", "Results", "Clear submit"] as const;
+const RUNWAY_LABELS = ["Upload", "Quiz", "Results", "Clear submit"] as const;
+
+function ProgressRunway({ step }: { step: Step }) {
   return (
-    <div className="mb-8 hidden items-center sm:flex">
-      {labels.map((label, idx) => {
+    <nav className="pf-runway" aria-label="Preflight phases">
+      {RUNWAY_LABELS.map((label, idx) => {
         const n = (idx + 1) as Step;
         const done = n < step;
         const active = n === step;
         return (
-          <div key={label} className="flex flex-1 items-center last:flex-none">
-            <div
-              className={cn(
-                "flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold",
-                active && "text-[var(--ink)]",
-                done && "text-[var(--green)]",
-                !active && !done && "text-[var(--ink-3)]",
-              )}
-            >
-              <span
-                className={cn(
-                  "flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border text-[10px] font-bold",
-                  active &&
-                    "border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]",
-                  done && "border-[var(--green)] bg-[var(--green)] text-white",
-                  !active &&
-                    !done &&
-                    "border-[var(--line-2)] bg-[var(--surface)] text-[var(--ink-3)]",
-                )}
-              >
-                {done ? "✓" : n}
-              </span>
-              {label}
-            </div>
-            {idx < labels.length - 1 && (
-              <div className="mx-1.5 h-px flex-1 bg-[var(--line)]" />
+          <div
+            key={label}
+            className={cn(
+              "pf-runway-step",
+              active && "active",
+              done && "done",
             )}
+          >
+            <span
+              className="font-mono text-[10px] tabular-nums opacity-80"
+              style={{ fontFamily: "var(--font-mono), monospace" }}
+            >
+              {done ? "✓" : `0${n}`}
+            </span>
+            <span>{label}</span>
           </div>
         );
       })}
-    </div>
+    </nav>
   );
+}
+
+function chipClassForKind(kind: ReturnType<typeof scanSymbols>[0]["kind"]) {
+  if (kind === "fn") return "pf-chip pf-chip-fn";
+  if (kind === "type") return "pf-chip pf-chip-type";
+  if (kind === "format") return "pf-chip pf-chip-format";
+  return "pf-chip";
 }
 
 export function CodeQuizGrader() {
@@ -129,6 +126,8 @@ export function CodeQuizGrader() {
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const autoGenLock = useRef(false);
+
+  const radarHits = useMemo(() => scanSymbols(files), [files]);
 
   const refreshOllama = useCallback(async () => {
     try {
@@ -430,447 +429,523 @@ export function CodeQuizGrader() {
     go(1);
   };
 
+  const attemptLabel =
+    attempt > 0
+      ? `attempt ${attempt + 1} · no penalty`
+      : "first pass · no penalty on retries";
+
   return (
-    <div className="mx-auto max-w-[720px] px-4 pb-24 pt-10 sm:pt-14">
-      <header className="cqg-hero-mark mb-8">
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <span className="cqg-trust">
-            Pre-submit check · click from your assignment
-          </span>
-          {ollama?.ok && ollama.selected ? (
-            <span className="rounded-full border border-[var(--line)] bg-[var(--sky-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--sky)]">
-              Using local model: {ollama.selected}
+    <div className="mx-auto max-w-7xl px-4 pb-24 pt-8 sm:pt-10">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
+        <aside className="flex w-full shrink-0 flex-col gap-4 lg:sticky lg:top-6 lg:w-[300px]">
+          <div>
+            <Link
+              href="/"
+              className="mb-1 inline-block text-[0.7rem] font-bold uppercase tracking-[0.22em] text-[var(--signal)] hover:opacity-90"
+              style={{ fontFamily: "var(--font-display), sans-serif" }}
+            >
+              Preflight
+            </Link>
+            <h1
+              className="text-[1.85rem] font-extrabold leading-[1.05] tracking-tight text-[var(--ink)]"
+              style={{ fontFamily: "var(--font-display), sans-serif" }}
+            >
+              Lab bench
+            </h1>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="cqg-trust">
+              <span className="pf-live-dot" />
+              Pre-submit check
             </span>
-          ) : (
-            <span className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink-3)]">
-              On-device fallback ready
-            </span>
-          )}
-        </div>
-
-        {ollama && !ollama.ok && (
-          <div className="mb-4 rounded-xl border border-[var(--line)] bg-[var(--paper)]/80 px-4 py-3 text-sm text-[var(--ink-2)]">
-            <span className="font-semibold text-[var(--ink)]">{ollama.message}</span>
-            {" · "}
-            Pull a small model:{" "}
-            <code className="rounded bg-[var(--surface)] px-1.5 py-0.5 font-mono text-[12px]">
-              {ollama.pullHint}
-            </code>
-            <button
-              type="button"
-              className="ml-2 font-semibold text-[var(--sky)] underline"
-              onClick={() => void refreshOllama()}
-            >
-              Refresh
-            </button>
-          </div>
-        )}
-
-        {course ? (
-          <div className="mb-5 rounded-2xl border border-[color-mix(in_srgb,var(--green)_28%,var(--line))] bg-[var(--green-soft)] px-4 py-3">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--green)]">
-              Opened from your class
-              {course.isDevSim ? " · pilot simulator" : ""}
-            </div>
-            <div
-              className="mt-1 text-lg font-semibold tracking-tight"
-              style={{ fontFamily: "var(--font-display), serif" }}
-            >
-              {course.assignmentTitle}
-            </div>
-            <div className="text-sm text-[var(--ink-2)]">
-              {course.courseTitle}
-              {course.userName ? ` · ${course.userName}` : ""}
-            </div>
-          </div>
-        ) : (
-          <div className="mb-5 rounded-2xl border border-[var(--line)] bg-[var(--sky-soft)]/70 px-4 py-3 text-sm text-[var(--ink-2)]">
-            This is a <strong>course tool</strong>, not a public website. Open it
-            from iCollege — or try the{" "}
-            <a className="font-semibold text-[var(--sky)] underline" href="/pilot">
-              /pilot
-            </a>{" "}
-            launch simulator.
-          </div>
-        )}
-
-        <h1
-          className="mb-2 text-[2.05rem] leading-[1.1] font-semibold tracking-tight text-[var(--ink)] sm:text-[2.4rem]"
-          style={{ fontFamily: "var(--font-display), serif" }}
-        >
-          Before you submit
-        </h1>
-        <p className="max-w-xl text-[1.02rem] leading-relaxed text-[var(--ink-2)]">
-          Upload the program for this assignment. We’ll build a short quiz from{" "}
-          <em>your</em> code. Pass at 100% to unlock turn-in — then go submit
-          the real lab. Miss any question and you can try a fresh quiz, no
-          penalty.
-        </p>
-      </header>
-
-      <ProgressTrack step={step} />
-
-      {step === 1 && (
-        <section>
-          <div className="cqg-card">
-            <div className="cqg-card-title">Upload your assignment code</div>
-            <p className="cqg-card-sub">
-              Drop your files (or load the sample). Your quiz appears
-              automatically from the symbols in the upload.
-            </p>
-            <div
-              role="button"
-              tabIndex={0}
-              aria-label="Click to upload files"
-              onClick={() => !busy && fileInputRef.current?.click()}
-              onKeyDown={(e) => {
-                if (!busy && (e.key === "Enter" || e.key === " "))
-                  fileInputRef.current?.click();
-              }}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragOver(true);
-              }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragOver(false);
-                if (!busy) void readFiles(e.dataTransfer.files);
-              }}
-              className={cn(
-                "cursor-pointer rounded-2xl border-2 border-dashed border-[var(--line-2)] px-6 py-10 text-center transition-all",
-                dragOver &&
-                  "border-[var(--green)] bg-[var(--green-soft)] scale-[1.01]",
-                "hover:border-[var(--green)] hover:bg-[var(--green-soft)]/50",
-                busy && "pointer-events-none opacity-70",
-              )}
-            >
-              <p className="mb-1 text-base font-semibold text-[var(--ink)]">
-                Drop files here, or click to browse
-              </p>
-              <span className="text-sm text-[var(--ink-3)]">
-                .py .js .ts .java .c .cpp .go .rs .swift and more
+            {ollama?.ok && ollama.selected ? (
+              <span className="pf-chip pf-chip-fn">
+                {ollama.selected}
               </span>
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept={ACCEPT}
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files) void readFiles(e.target.files);
-              }}
-            />
-            <div className="mt-3 flex flex-wrap items-center gap-3">
-              <Button
+            ) : (
+              <span className="pf-chip">on-device fallback</span>
+            )}
+          </div>
+
+          {ollama && !ollama.ok && (
+            <div className="pf-panel py-3 text-sm text-[var(--ink-2)]">
+              <span className="font-semibold text-[var(--ink)]">
+                {ollama.message}
+              </span>
+              <div className="mt-2 font-mono text-[11px] text-[var(--ink-3)]">
+                {ollama.pullHint}
+              </div>
+              <button
                 type="button"
-                variant="outline"
-                disabled={busy}
-                onClick={loadSample}
+                className="mt-2 text-xs font-semibold text-[var(--signal)] underline"
+                onClick={() => void refreshOllama()}
               >
-                Load sample program ({SAMPLE_PROGRAM.name})
-              </Button>
-              {busy && (
-                <span className="flex items-center gap-2 text-[13px] text-[var(--ink-3)]">
-                  <span className="cqg-spin" />
-                  {busyLabel}
+                Refresh host model
+              </button>
+            </div>
+          )}
+
+          {course ? (
+            <div className="pf-panel border-[color-mix(in_srgb,var(--signal)_25%,var(--line))] bg-[var(--green-soft)]/40">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--signal)]">
+                From your class
+                {course.isDevSim ? " · pilot" : ""}
+              </div>
+              <div
+                className="mt-1 text-base font-bold text-[var(--ink)]"
+                style={{ fontFamily: "var(--font-display), sans-serif" }}
+              >
+                {course.assignmentTitle}
+              </div>
+              <div className="text-xs text-[var(--ink-2)]">
+                {course.courseTitle}
+                {course.userName ? ` · ${course.userName}` : ""}
+              </div>
+            </div>
+          ) : (
+            <div className="pf-panel text-sm text-[var(--ink-2)]">
+              Open from iCollege or{" "}
+              <Link className="font-semibold text-[var(--signal)] underline" href="/pilot">
+                /pilot
+              </Link>{" "}
+              so your course can record clearance.
+            </div>
+          )}
+
+          <div className="pf-panel">
+            <div className="pf-panel-title text-sm">Phase runway</div>
+            <ProgressRunway step={step} />
+          </div>
+
+          <div className="pf-panel">
+            <div className="pf-panel-title text-sm">Payload files</div>
+            <p className="pf-panel-sub mb-2 text-xs">
+              {files.length
+                ? `${files.length} file${files.length > 1 ? "s" : ""} in this check`
+                : "Nothing loaded yet"}
+            </p>
+            {files.length > 0 ? (
+              <ul className="flex flex-col gap-1.5">
+                {files.map((f) => (
+                  <li
+                    key={f.name}
+                    className="flex items-center gap-2 rounded-md border border-[var(--line)] bg-[#101820] px-2.5 py-1.5 font-mono text-[11px]"
+                    style={{ fontFamily: "var(--font-mono), monospace" }}
+                  >
+                    <span className="truncate text-[var(--ink)]">{f.name}</span>
+                    <span className="ml-auto shrink-0 text-[var(--ink-3)]">
+                      {fmtBytes(f.size)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-[var(--ink-3)]">
+                Upload on the stage → quiz builds automatically.
+              </p>
+            )}
+          </div>
+
+          <div className="pf-panel">
+            <div className="pf-panel-title text-sm">Symbol radar</div>
+            <p className="pf-panel-sub mb-2 text-xs">
+              Symbols we’ll likely probe in your quiz.
+            </p>
+            {radarHits.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {radarHits.map((h) => (
+                  <span
+                    key={`${h.kind}:${h.label}`}
+                    className={chipClassForKind(h.kind)}
+                    title={h.kind}
+                  >
+                    {h.label}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-[var(--ink-3)]">
+                Radar activates after upload.
+              </p>
+            )}
+          </div>
+
+          {(step >= 2 || attempt > 0) && (
+            <div className="rounded-lg border border-dashed border-[var(--line-2)] bg-[#101820]/80 px-3 py-2 text-center text-xs font-semibold text-[var(--ink-2)]">
+              {attemptLabel}
+              {quizMode && step === 2 && (
+                <span className="mt-1 block font-normal text-[var(--ink-3)]">
+                  {quizMode === "ollama"
+                    ? `via ${modelUsed ?? "local model"}`
+                    : "on-device quiz engine"}
                 </span>
               )}
             </div>
-            {files.length > 0 && (
-              <div className="mt-4 flex flex-col gap-1.5">
-                {files.map((f) => (
-                  <div
-                    key={f.name}
-                    className="flex items-center gap-2 rounded-lg border border-[var(--line)] bg-[var(--paper)]/80 px-3 py-2 font-mono text-[13px]"
-                  >
-                    <span className="truncate font-medium">{f.name}</span>
-                    <span className="ml-auto font-sans text-[11px] text-[var(--ink-3)]">
-                      {fmtBytes(f.size)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          {error && <div className="cqg-err mt-2.5">{error}</div>}
-        </section>
-      )}
+          )}
+        </aside>
 
-      {step === 2 && (
-        <section>
-          <div className="cqg-card">
-            <div className="cqg-card-title">
-              Show what you know
-              <span className="ml-2 text-base font-normal text-[var(--ink-3)]">
-                ·{" "}
-                {quizMode === "ollama"
-                  ? `local model ${modelUsed}`
-                  : "on-device quiz"}
-                {attempt > 0 ? ` · attempt ${attempt + 1}` : ""}
-              </span>
-            </div>
-            <p className="cqg-card-sub">
-              Answer every question. You need a perfect score to turn this in.
-            </p>
-            {notice && (
-              <div className="mb-4 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-[13px] text-[var(--ink-2)]">
-                {notice}
+        <div className="min-w-0 flex-1">
+          {step === 1 && (
+            <section className="pf-panel">
+              <div className="pf-panel-title">Load your assignment code</div>
+              <p className="pf-panel-sub">
+                Drop lab files or load the sample. Your quiz generates from the
+                symbols in your upload — watch the radar on the left.
+              </p>
+              <div
+                role="button"
+                tabIndex={0}
+                aria-label="Click to upload files"
+                onClick={() => !busy && fileInputRef.current?.click()}
+                onKeyDown={(e) => {
+                  if (!busy && (e.key === "Enter" || e.key === " "))
+                    fileInputRef.current?.click();
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  if (!busy) void readFiles(e.dataTransfer.files);
+                }}
+                className={cn(
+                  "pf-drop",
+                  dragOver && "over",
+                  busy && "pointer-events-none opacity-70",
+                )}
+              >
+                <p className="mb-1 text-base font-semibold text-[var(--ink)]">
+                  Drop files here, or click to browse
+                </p>
+                <span className="text-sm text-[var(--ink-3)]">
+                  .py .js .ts .java .c .cpp .go .rs .swift and more
+                </span>
               </div>
-            )}
-            {(quizData.mc?.length ?? 0) > 0 && (
-              <>
-                <div className="cqg-section-head">Multiple-choice</div>
-                {quizData.mc.map((q, i) => (
-                  <div key={q.id} className="mb-5">
-                    <div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-[var(--sky)]">
-                      MC · {i + 1} of {quizData.mc.length}
-                    </div>
-                    <div className="mb-2.5 text-[15px] leading-relaxed">
-                      {q.question}
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      {(["A", "B", "C", "D"] as const).map((k) => {
-                        const chosen = mcChosen[i] === k;
-                        return (
-                          <label
-                            key={k}
-                            className={cn(
-                              "flex cursor-pointer items-start gap-2.5 rounded-xl border px-3.5 py-2.5",
-                              chosen
-                                ? "border-[var(--green)] bg-[var(--green-soft)]"
-                                : "border-[var(--line)] hover:border-[var(--green)]",
-                            )}
-                          >
-                            <input
-                              type="radio"
-                              name={`mc-${i}`}
-                              checked={chosen}
-                              onChange={() =>
-                                setMcChosen((prev) => ({ ...prev, [i]: k }))
-                              }
-                              className="mt-0.5 accent-[var(--green)]"
-                            />
-                            <span className="text-sm">
-                              <strong>{k}.</strong> {q.options[k]}
-                            </span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </>
-            )}
-            {(quizData.fa?.length ?? 0) > 0 && (
-              <>
-                <div className="cqg-section-head">Free-answer</div>
-                {quizData.fa.map((q, i) => (
-                  <div key={q.id} className="mb-5">
-                    <div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-[var(--green)]">
-                      FA · {i + 1} of {quizData.fa.length}
-                    </div>
-                    <div className="mb-2.5 text-[15px] leading-relaxed">
-                      {q.question}
-                    </div>
-                    <Textarea
-                      rows={3}
-                      placeholder="Explain in your own words — name functions and variables from your code…"
-                      value={faAnswers[i] || ""}
-                      onChange={(e) =>
-                        setFaAnswers((prev) => ({
-                          ...prev,
-                          [i]: e.target.value,
-                        }))
-                      }
-                      className="min-h-[96px] bg-[var(--surface)] text-sm"
-                    />
-                  </div>
-                ))}
-              </>
-            )}
-          </div>
-          <div className="mt-1 flex flex-wrap items-center gap-3">
-            <Button
-              type="button"
-              className="h-10 px-4"
-              disabled={busy}
-              onClick={() => void submitAnswers()}
-            >
-              Check answers
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={busy}
-              onClick={resetAll}
-            >
-              Different files
-            </Button>
-            {busy && (
-              <span className="flex items-center gap-2 text-[13px] text-[var(--ink-3)]">
-                <span className="cqg-spin" />
-                {busyLabel}
-              </span>
-            )}
-          </div>
-          {error && <div className="cqg-err mt-2.5">{error}</div>}
-        </section>
-      )}
-
-      {step === 3 && (
-        <section>
-          <div className="cqg-card">
-            <div className="cqg-card-title">
-              {perfect
-                ? "Perfect — you’re cleared to submit"
-                : "Not quite yet"}
-            </div>
-            <p className="cqg-card-sub">
-              {perfect
-                ? "You got every question right. Mark this check complete, then submit your real assignment in iCollege."
-                : "You need every answer correct before you can submit the lab. Try a fresh quiz — no penalty."}
-            </p>
-            <div className="mb-5 rounded-2xl border border-[var(--line)] bg-[var(--paper)]/70 px-4 py-4">
-              <div className="flex flex-wrap items-end justify-between gap-2">
-                <div>
-                  <div className="text-[12px] font-bold uppercase tracking-wider text-[var(--ink-3)]">
-                    Score
-                  </div>
-                  <div
-                    className="text-[2.2rem] font-semibold leading-none"
-                    style={{ fontFamily: "var(--font-display), serif" }}
-                  >
-                    {grand} / {grandMax}
-                  </div>
-                </div>
-                <div
-                  className={cn(
-                    "font-semibold",
-                    perfect ? "text-[var(--green)]" : "text-[var(--amber)]",
-                  )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept={ACCEPT}
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files) void readFiles(e.target.files);
+                }}
+              />
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={loadSample}
+                  className="border-[var(--line-2)] bg-transparent"
                 >
-                  {perfect ? "100% · pass" : "Need 100% to turn in"}
-                </div>
+                  Load sample ({SAMPLE_PROGRAM.name})
+                </Button>
+                {busy && (
+                  <span className="flex items-center gap-2 text-[13px] text-[var(--ink-3)]">
+                    <span className="pf-spin" />
+                    {busyLabel}
+                  </span>
+                )}
               </div>
-            </div>
+              {error && <div className="pf-err mt-4">{error}</div>}
+            </section>
+          )}
 
-            {mcResults.map((a) => (
-              <div
-                key={a.id}
-                className="border-b border-[var(--line)] py-3 text-sm"
-              >
-                <div className="font-medium">{a.question}</div>
-                <div
-                  className={cn(
-                    "mt-1 text-xs font-semibold",
-                    a.score === 1 ? "text-[var(--green)]" : "text-red-700",
-                  )}
-                >
-                  {a.score === 1
-                    ? "Correct"
-                    : `Not quite · correct is ${a.correct}`}
-                </div>
-              </div>
-            ))}
-            {faResults.map((s, i) => (
-              <div
-                key={s.id}
-                className="border-b border-[var(--line)] py-3 text-sm"
-              >
-                <div className="flex justify-between gap-3">
-                  <div className="font-medium">
-                    {faAnswerRows[i]?.question}
+          {step === 2 && (
+            <section>
+              <div className="pf-panel">
+                <div className="pf-panel-title">Prove it on the stage</div>
+                <p className="pf-panel-sub">
+                  Answer every question. You need a perfect score to earn your
+                  clearance stamp.
+                </p>
+                {notice && (
+                  <div className="mb-4 rounded-lg border border-[var(--line)] bg-[#101820] px-3 py-2 text-[13px] text-[var(--ink-2)]">
+                    {notice}
                   </div>
-                  <div className="font-semibold">{s.score}/10</div>
-                </div>
-                <div className="mt-1 text-[13px] text-[var(--ink-2)]">
-                  {s.feedback}
-                </div>
+                )}
+                {(quizData.mc?.length ?? 0) > 0 && (
+                  <>
+                    <div className="mb-3 text-[11px] font-bold uppercase tracking-wider text-[var(--sky)]">
+                      Multiple-choice
+                    </div>
+                    {quizData.mc.map((q, i) => (
+                      <div key={q.id} className="mb-6 last:mb-0">
+                        <div className="mb-1 font-mono text-[10px] text-[var(--ink-3)]">
+                          MC {i + 1}/{quizData.mc.length}
+                        </div>
+                        <div className="mb-2.5 text-[15px] leading-relaxed">
+                          {q.question}
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          {(["A", "B", "C", "D"] as const).map((k) => {
+                            const chosen = mcChosen[i] === k;
+                            return (
+                              <label
+                                key={k}
+                                className={cn(
+                                  "flex cursor-pointer items-start gap-2.5 rounded-lg border px-3.5 py-2.5 transition-colors",
+                                  chosen
+                                    ? "border-[var(--signal)] bg-[var(--green-soft)]"
+                                    : "border-[var(--line)] hover:border-[color-mix(in_srgb,var(--signal)_45%,var(--line))]",
+                                )}
+                              >
+                                <input
+                                  type="radio"
+                                  name={`mc-${i}`}
+                                  checked={chosen}
+                                  onChange={() =>
+                                    setMcChosen((prev) => ({ ...prev, [i]: k }))
+                                  }
+                                  className="mt-0.5 accent-[var(--signal)]"
+                                />
+                                <span className="text-sm">
+                                  <strong>{k}.</strong> {q.options[k]}
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+                {(quizData.fa?.length ?? 0) > 0 && (
+                  <>
+                    <div className="mb-3 mt-6 text-[11px] font-bold uppercase tracking-wider text-[var(--signal)]">
+                      Free-answer
+                    </div>
+                    {quizData.fa.map((q, i) => (
+                      <div key={q.id} className="mb-6 last:mb-0">
+                        <div className="mb-1 font-mono text-[10px] text-[var(--ink-3)]">
+                          FA {i + 1}/{quizData.fa.length}
+                        </div>
+                        <div className="mb-2.5 text-[15px] leading-relaxed">
+                          {q.question}
+                        </div>
+                        <Textarea
+                          rows={3}
+                          placeholder="Explain in your own words — name functions and variables from your code…"
+                          value={faAnswers[i] || ""}
+                          onChange={(e) =>
+                            setFaAnswers((prev) => ({
+                              ...prev,
+                              [i]: e.target.value,
+                            }))
+                          }
+                          className="min-h-[96px] border-[var(--line-2)] bg-[#101820] text-sm"
+                        />
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
-            ))}
-          </div>
-          <div className="mt-1 flex flex-wrap gap-3">
-            {perfect ? (
-              <Button
-                type="button"
-                className="h-10 px-4"
-                disabled={busy}
-                onClick={() => void turnIn()}
-              >
-                Mark check complete
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                className="h-10 px-4"
-                disabled={busy}
-                onClick={retryFreshQuiz}
-              >
-                Try a new quiz
-              </Button>
-            )}
-            <Button type="button" variant="outline" onClick={resetAll}>
-              Start over
-            </Button>
-            {busy && (
-              <span className="flex items-center gap-2 text-[13px] text-[var(--ink-3)]">
-                <span className="cqg-spin" />
-                {busyLabel}
-              </span>
-            )}
-          </div>
-          {error && <div className="cqg-err mt-2.5">{error}</div>}
-        </section>
-      )}
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <Button
+                  type="button"
+                  className="h-10 px-4"
+                  disabled={busy}
+                  onClick={() => void submitAnswers()}
+                >
+                  Check answers
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={resetAll}
+                  className="border-[var(--line-2)] bg-transparent"
+                >
+                  Different files
+                </Button>
+                {busy && (
+                  <span className="flex items-center gap-2 text-[13px] text-[var(--ink-3)]">
+                    <span className="pf-spin" />
+                    {busyLabel}
+                  </span>
+                )}
+              </div>
+              {error && <div className="pf-err mt-3">{error}</div>}
+            </section>
+          )}
 
-      {step === 4 && submitResult && (
-        <section>
-          <div className="cqg-card">
-            <div className="cqg-card-title">Check complete</div>
-            <p className="cqg-card-sub">{submitResult.message}</p>
-            <div className="rounded-2xl border border-[color-mix(in_srgb,var(--green)_30%,var(--line))] bg-[var(--green-soft)] px-4 py-4">
-              <div
-                className="text-2xl font-semibold"
-                style={{ fontFamily: "var(--font-display), serif" }}
-              >
-                Cleared to submit your assignment
-              </div>
-              <div className="mt-2 text-sm text-[var(--ink-2)]">
-                Completion ID{" "}
-                <code className="rounded bg-[var(--surface)] px-1.5 py-0.5 text-[12px]">
-                  {submitResult.completionId}
-                </code>
-              </div>
-              <div className="mt-1 text-sm text-[var(--ink-2)]">
-                {new Date(submitResult.submittedAt).toLocaleString()}
-              </div>
-              {course && (
-                <div className="mt-3 text-sm text-[var(--ink-2)]">
-                  {course.assignmentTitle}
-                  <br />
-                  {course.courseTitle}
+          {step === 3 && (
+            <section>
+              <div className="pf-panel">
+                <div className="pf-panel-title">
+                  {perfect
+                    ? "Runway clear — stamp ready"
+                    : "Hold short — not 100% yet"}
                 </div>
-              )}
-            </div>
-          </div>
-          <div className="mt-1 flex flex-wrap gap-3">
-            {course?.returnUrl ? (
-              <Button type="button" className="h-10 px-4" asChild>
-                <a href={course.returnUrl}>Return to course</a>
-              </Button>
-            ) : (
-              <Button type="button" className="h-10 px-4" asChild>
-                <a href="/pilot">Back to pilot simulator</a>
-              </Button>
-            )}
-            <Button type="button" variant="outline" onClick={resetAll}>
-              Practice again
-            </Button>
-          </div>
-        </section>
-      )}
+                <p className="pf-panel-sub">
+                  {perfect
+                    ? "Every answer correct. Mark complete, then submit the real lab in iCollege."
+                    : "You need every answer correct. Request a fresh quiz — no penalty."}
+                </p>
+                <div className="mb-5 rounded-lg border border-[var(--line)] bg-[#101820] px-4 py-4">
+                  <div className="flex flex-wrap items-end justify-between gap-2">
+                    <div>
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--ink-3)]">
+                        Score
+                      </div>
+                      <div
+                        className="text-[2.4rem] font-extrabold leading-none text-[var(--ink)]"
+                        style={{ fontFamily: "var(--font-display), sans-serif" }}
+                      >
+                        {grand} / {grandMax}
+                      </div>
+                    </div>
+                    <div
+                      className={cn(
+                        "text-sm font-semibold",
+                        perfect ? "text-[var(--signal)]" : "text-[var(--amber)]",
+                      )}
+                    >
+                      {perfect ? "100% · clearance eligible" : "Need 100% to turn in"}
+                    </div>
+                  </div>
+                </div>
+
+                {mcResults.map((a) => (
+                  <div
+                    key={a.id}
+                    className="border-b border-[var(--line)] py-3 text-sm last:border-0"
+                  >
+                    <div className="font-medium">{a.question}</div>
+                    <div
+                      className={cn(
+                        "mt-1 text-xs font-semibold",
+                        a.score === 1 ? "text-[var(--signal)]" : "text-red-400",
+                      )}
+                    >
+                      {a.score === 1
+                        ? "Correct"
+                        : `Not quite · correct is ${a.correct}`}
+                    </div>
+                  </div>
+                ))}
+                {faResults.map((s, i) => (
+                  <div
+                    key={s.id}
+                    className="border-b border-[var(--line)] py-3 text-sm last:border-0"
+                  >
+                    <div className="flex justify-between gap-3">
+                      <div className="font-medium">
+                        {faAnswerRows[i]?.question}
+                      </div>
+                      <div className="font-semibold">{s.score}/10</div>
+                    </div>
+                    <div className="mt-1 text-[13px] text-[var(--ink-2)]">
+                      {s.feedback}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 flex flex-wrap gap-3">
+                {perfect ? (
+                  <Button
+                    type="button"
+                    className="h-10 px-4"
+                    disabled={busy}
+                    onClick={() => void turnIn()}
+                  >
+                    Mark check complete
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    className="h-10 px-4"
+                    disabled={busy}
+                    onClick={retryFreshQuiz}
+                  >
+                    Try a new quiz
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={resetAll}
+                  className="border-[var(--line-2)] bg-transparent"
+                >
+                  Start over
+                </Button>
+                {busy && (
+                  <span className="flex items-center gap-2 text-[13px] text-[var(--ink-3)]">
+                    <span className="pf-spin" />
+                    {busyLabel}
+                  </span>
+                )}
+              </div>
+              {error && <div className="pf-err mt-3">{error}</div>}
+            </section>
+          )}
+
+          {step === 4 && submitResult && (
+            <section>
+              <div className="pf-panel">
+                <div className="pf-panel-title">Clearance passport</div>
+                <p className="pf-panel-sub">{submitResult.message}</p>
+                <div className="pf-stamp">
+                  <div
+                    className="text-xl font-extrabold text-[var(--ink)]"
+                    style={{ fontFamily: "var(--font-display), sans-serif" }}
+                  >
+                    Cleared to submit your assignment
+                  </div>
+                  <div
+                    className="mt-3 font-mono text-xs text-[var(--ink-2)]"
+                    style={{ fontFamily: "var(--font-mono), monospace" }}
+                  >
+                    ID {submitResult.completionId}
+                    <br />
+                    {new Date(submitResult.submittedAt).toLocaleString()}
+                  </div>
+                  {files.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {files.map((f) => (
+                        <span key={f.name} className="pf-chip">
+                          {f.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {course && (
+                    <div className="mt-3 text-sm text-[var(--ink-2)]">
+                      {course.assignmentTitle}
+                      <br />
+                      {course.courseTitle}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-3">
+                {course?.returnUrl ? (
+                  <Button type="button" className="h-10 px-4" asChild>
+                    <a href={course.returnUrl}>Return to course</a>
+                  </Button>
+                ) : (
+                  <Button type="button" className="h-10 px-4" asChild>
+                    <Link href="/">Back to student desk</Link>
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={resetAll}
+                  className="border-[var(--line-2)] bg-transparent"
+                >
+                  Practice again
+                </Button>
+              </div>
+            </section>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

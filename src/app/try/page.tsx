@@ -27,7 +27,7 @@ export default function TryPage() {
       context_title: "Demo course",
       resource_link_id: "pre-submit-check",
       resource_link_title: "Before you submit · code understanding check",
-      launch_presentation_return_url: "http://127.0.0.1:43127/try",
+      launch_presentation_return_url: "http://127.0.0.1:43127/check",
     };
     for (const [k, v] of Object.entries(fields)) {
       const input = document.createElement("input");
@@ -49,16 +49,19 @@ export default function TryPage() {
   }, []);
 
   return (
-    <main className="cqg-shell min-h-screen text-[var(--ink)]">
+    <main className="pf-shell min-h-screen text-[var(--ink)]">
       <div className="mx-auto max-w-[560px] px-4 py-16 text-center">
-        <p className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-[var(--ink-3)]">
-          Course check
+        <p
+          className="mb-3 text-xs font-bold uppercase tracking-[0.22em] text-[var(--signal)]"
+          style={{ fontFamily: "var(--font-display), sans-serif" }}
+        >
+          Preflight
         </p>
         <h1
-          className="mb-3 text-[2rem] font-semibold tracking-tight"
-          style={{ fontFamily: "var(--font-display), serif" }}
+          className="mb-3 text-[2rem] font-extrabold tracking-tight"
+          style={{ fontFamily: "var(--font-display), sans-serif" }}
         >
-          Opening your understanding check…
+          Opening your lab bench…
         </h1>
         <p className="mb-8 text-[1.02rem] leading-relaxed text-[var(--ink-2)]">
           Upload the code for your assignment, pass the short quiz, then you’re
