@@ -395,33 +395,42 @@ export function CodeQuizGrader() {
 
   const ollamaLine = ollama
     ? ollama.ok && ollama.selected
-      ? `Quiz engine: ${ollama.selected} on this host`
-      : "Quiz engine: on-device fallback (Ollama optional)"
+      ? ollama.selected
+      : "on-device fallback"
     : null;
 
   return (
-    <div className="mx-auto max-w-xl px-4 py-12 sm:py-16">
-      <header className="mb-10">
-        <p className="text-sm font-medium text-[var(--ink-3)]">Preflight</p>
-        {course && (
-          <p className="mt-2 text-sm text-[var(--ink-2)]">
+    <div className="mx-auto max-w-[560px] px-5 pb-20 pt-14 sm:pt-20">
+      <header className="pf-hero mb-10">
+        <div className="mb-6 flex flex-wrap items-center gap-2">
+          <span className="cqg-trust">Course check</span>
+          {course?.isDevSim && <span className="cqg-trust">Pilot</span>}
+        </div>
+
+        <p className="pf-brand">Preflight</p>
+
+        {course ? (
+          <p className="mt-4 text-[0.95rem] text-[var(--ink-2)]">
             {course.assignmentTitle}
-            {course.isDevSim ? " · pilot" : ""}
+            {course.courseTitle ? ` · ${course.courseTitle}` : ""}
           </p>
-        )}
-        <h1 className="mt-3 text-[1.75rem] font-semibold tracking-tight text-[var(--ink)] sm:text-[2rem]">
-          Before you submit
-        </h1>
-        <p className="mt-3 text-base leading-relaxed text-[var(--ink-2)]">
-          Upload your code, answer a few questions about what you wrote, then
-          mark complete when you score 100%.
+        ) : null}
+
+        <p className="mt-4 max-w-[28rem] text-[1.05rem] leading-relaxed text-[var(--ink-2)]">
+          Drop in the code for this lab. Pass a short quiz built from{" "}
+          <em className="text-[var(--ink)]">your</em> file, then you’re cleared
+          to submit.
         </p>
-        {ollamaLine && (
-          <p className="mt-3 text-xs text-[var(--ink-3)]">{ollamaLine}</p>
-        )}
-        <p className="mt-6 text-sm text-[var(--ink-3)]" aria-current="step">
-          {STEP_LABELS[step]}
-        </p>
+
+        <div className="mt-7 flex items-center justify-between gap-3">
+          <span className="pf-step">
+            <span className="pf-step-dot" aria-hidden />
+            {STEP_LABELS[step]}
+          </span>
+          {ollamaLine && (
+            <span className="text-[11px] text-[var(--ink-3)]">{ollamaLine}</span>
+          )}
+        </div>
       </header>
 
       {step === 1 && (
@@ -451,11 +460,11 @@ export function CodeQuizGrader() {
               busy && "pointer-events-none opacity-70",
             )}
           >
-            <p className="mb-1 text-base font-semibold text-[var(--ink)]">
-              Drop files here, or click to browse
+            <p className="mb-1.5 text-[1.05rem] font-semibold tracking-tight text-[var(--ink)]">
+              Drop your files here
             </p>
             <span className="text-sm text-[var(--ink-3)]">
-              .py .js .ts .java .c .cpp .go .rs .swift and more
+              or click to browse · .py .c .js .java and more
             </span>
           </div>
           <input
@@ -474,9 +483,8 @@ export function CodeQuizGrader() {
               variant="outline"
               disabled={busy}
               onClick={loadSample}
-              className="border-[var(--line-2)] bg-transparent"
             >
-              Load sample ({SAMPLE_PROGRAM.name})
+              Try sample
             </Button>
             {busy && (
               <span className="flex items-center gap-2 text-[13px] text-[var(--ink-3)]">
@@ -490,8 +498,7 @@ export function CodeQuizGrader() {
               {files.map((f) => (
                 <li
                   key={f.name}
-                  className="flex justify-between gap-2 font-mono text-[11px] text-[var(--ink-2)]"
-                  style={{ fontFamily: "var(--font-mono), monospace" }}
+                  className="flex justify-between gap-2 font-mono text-[12px] text-[var(--ink-2)]"
                 >
                   <span className="truncate">{f.name}</span>
                   <span className="shrink-0 text-[var(--ink-3)]">
@@ -542,7 +549,7 @@ export function CodeQuizGrader() {
                             className={cn(
                               "flex cursor-pointer items-start gap-2.5 rounded-lg border px-3.5 py-2.5 transition-colors",
                               chosen
-                                ? "border-[var(--ink)] bg-[#f5f5f5]"
+                                ? "border-[var(--brand)] bg-[var(--brand-soft)]"
                                 : "border-[var(--line)] hover:border-[var(--line-2)]",
                             )}
                           >
@@ -553,7 +560,7 @@ export function CodeQuizGrader() {
                               onChange={() =>
                                 setMcChosen((prev) => ({ ...prev, [i]: k }))
                               }
-                              className="mt-0.5 accent-black"
+                              className="mt-0.5 accent-[var(--brand)]"
                             />
                             <span className="text-sm">
                               <strong>{k}.</strong> {q.options[k]}

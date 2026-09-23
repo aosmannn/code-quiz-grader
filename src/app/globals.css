@@ -49,51 +49,52 @@
 }
 
 :root {
-  --ink: #111111;
-  --ink-2: #555555;
-  --ink-3: #888888;
-  --paper: #ffffff;
+  --ink: #0c1222;
+  --ink-2: #5b6578;
+  --ink-3: #8b93a7;
+  --paper: #f6f7f9;
   --surface: #ffffff;
-  --line: #e8e8e8;
-  --line-2: #d0d0d0;
-  --green: #111111;
-  --green-soft: #f5f5f5;
-  --amber: #666666;
-  --sky: #333333;
-  --sky-soft: #f5f5f5;
-  --signal: #111111;
-  --background: #ffffff;
-  --foreground: #111111;
+  --line: #e4e7ee;
+  --line-2: #cfd5e2;
+  --brand: #2f5bff;
+  --brand-soft: #eef2ff;
+  --green: #1a7f4b;
+  --green-soft: #eaf7f0;
+  --amber: #9a6700;
+  --sky: #2f5bff;
+  --sky-soft: #eef2ff;
+  --signal: #2f5bff;
+  --background: #f6f7f9;
+  --foreground: #0c1222;
   --card: #ffffff;
-  --card-foreground: #111111;
+  --card-foreground: #0c1222;
   --popover: #ffffff;
-  --popover-foreground: #111111;
-  --primary: #111111;
+  --popover-foreground: #0c1222;
+  --primary: #0c1222;
   --primary-foreground: #ffffff;
-  --secondary: #f5f5f5;
-  --secondary-foreground: #111111;
-  --muted: #f5f5f5;
-  --muted-foreground: #555555;
-  --accent: #f5f5f5;
-  --accent-foreground: #111111;
-  --destructive: #b42318;
-  --border: #e8e8e8;
-  --input: #e8e8e8;
-  --ring: #111111;
-  --chart-1: #111111;
-  --chart-2: #555555;
-  --chart-3: #888888;
-  --chart-4: #aaaaaa;
-  --chart-5: #cccccc;
-  --radius: 0.5rem;
+  --secondary: #eef0f4;
+  --secondary-foreground: #0c1222;
+  --muted: #eef0f4;
+  --muted-foreground: #5b6578;
+  --accent-color: #eef2ff;
+  --destructive: #c62828;
+  --border: #e4e7ee;
+  --input: #e4e7ee;
+  --ring: #2f5bff;
+  --chart-1: #2f5bff;
+  --chart-2: #0c1222;
+  --chart-3: #5b6578;
+  --chart-4: #8b93a7;
+  --chart-5: #cfd5e2;
+  --radius: 0.875rem;
   --sidebar: #ffffff;
-  --sidebar-foreground: #111111;
-  --sidebar-primary: #111111;
+  --sidebar-foreground: #0c1222;
+  --sidebar-primary: #0c1222;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f5f5f5;
-  --sidebar-accent-foreground: #111111;
-  --sidebar-border: #e8e8e8;
-  --sidebar-ring: #111111;
+  --sidebar-accent: #eef0f4;
+  --sidebar-accent-foreground: #0c1222;
+  --sidebar-border: #e4e7ee;
+  --sidebar-ring: #2f5bff;
 }
 
 @layer base {
@@ -101,7 +102,7 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-white text-[var(--ink)];
+    @apply bg-[var(--paper)] text-[var(--ink)];
   }
   html {
     @apply font-sans;
@@ -109,39 +110,35 @@
 }
 
 .pf-shell {
+  position: relative;
+  isolation: isolate;
   min-height: 100vh;
-  background: #ffffff;
+  overflow-x: clip;
   color: var(--ink);
+  background:
+    radial-gradient(900px 420px at 15% -5%, rgba(47, 91, 255, 0.08), transparent 55%),
+    radial-gradient(700px 360px at 90% 0%, rgba(12, 18, 34, 0.04), transparent 50%),
+    linear-gradient(180deg, #ffffff 0%, #f6f7f9 42%, #f3f5f8 100%);
 }
 
 .pf-panel {
-  background: #ffffff;
+  background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 0.5rem;
-  padding: 1.25rem 1.35rem;
-}
-
-.pf-panel-title {
-  font-size: 1.1rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  margin-bottom: 0.35rem;
-}
-
-.pf-panel-sub {
-  font-size: 0.95rem;
-  line-height: 1.5;
-  color: var(--ink-2);
-  margin-bottom: 1rem;
+  border-radius: 1.1rem;
+  padding: 1.35rem 1.4rem;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 18px 40px -28px rgba(12, 18, 34, 0.28);
+  animation: pf-rise 0.45s ease both;
 }
 
 .pf-err {
-  background: #fef2f2;
-  border: 1px solid #f0b4b4;
-  border-radius: 0.5rem;
-  padding: 0.7rem 1rem;
+  background: #fff5f5;
+  border: 1px solid #ffc9c9;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
   font-size: 0.875rem;
-  color: #b42318;
+  color: #c62828;
 }
 
 .pf-spin {
@@ -157,37 +154,67 @@
 
 .pf-drop {
   border: 1.5px dashed var(--line-2);
-  border-radius: 0.5rem;
-  padding: 2rem 1.25rem;
+  border-radius: 1rem;
+  padding: 2.4rem 1.4rem;
   text-align: center;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-  background: #fafafa;
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease,
+    box-shadow 0.18s ease;
+  background: linear-gradient(180deg, #fbfcfe 0%, #f4f6fa 100%);
 }
 
 .pf-drop:hover,
 .pf-drop.over {
-  border-color: var(--ink);
-  background: #f5f5f5;
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line-2));
+  background: var(--accent-soft);
+  transform: translateY(-1px);
+  box-shadow: 0 16px 30px -24px rgba(47, 91, 255, 0.55);
+}
+
+.pf-brand {
+  font-size: clamp(2.6rem, 7vw, 3.6rem);
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  line-height: 0.95;
+  color: var(--ink);
+}
+
+.pf-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.pf-step-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px rgba(47, 91, 255, 0.12);
 }
 
 .cqg-shell {
   min-height: 100vh;
-  background: #ffffff;
+  background: var(--paper);
   color: var(--ink);
 }
 
 .cqg-card {
-  background: #ffffff;
+  background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 0.5rem;
-  padding: 1.25rem 1.35rem;
+  border-radius: 1.1rem;
+  padding: 1.35rem 1.4rem;
   margin-bottom: 1rem;
+  box-shadow: 0 18px 40px -28px rgba(12, 18, 34, 0.28);
 }
 
 .cqg-card-title {
-  font-size: 1.1rem;
-  font-weight: 600;
+  font-size: 1.15rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
   margin-bottom: 0.35rem;
 }
 
@@ -199,12 +226,12 @@
 }
 
 .cqg-err {
-  background: #fef2f2;
-  border: 1px solid #f0b4b4;
-  border-radius: 0.5rem;
-  padding: 0.7rem 1rem;
+  background: #fff5f5;
+  border: 1px solid #ffc9c9;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
   font-size: 0.875rem;
-  color: #b42318;
+  color: #c62828;
 }
 
 .cqg-spin {
@@ -224,15 +251,39 @@
   gap: 0.4rem;
   border-radius: 999px;
   border: 1px solid var(--line);
-  background: #f5f5f5;
+  background: #fff;
   color: var(--ink-2);
   font-size: 0.75rem;
   font-weight: 600;
-  padding: 0.3rem 0.7rem;
+  padding: 0.35rem 0.75rem;
 }
 
 @keyframes pf-rot {
   to {
     transform: rotate(360deg);
   }
+}
+
+@keyframes pf-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pf-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.pf-hero {
+  animation: pf-fade 0.55s ease both;
 }
