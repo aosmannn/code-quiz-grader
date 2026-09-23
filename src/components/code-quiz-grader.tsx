@@ -25,10 +25,10 @@ const COMPLETION_KEY = "cqg_completions";
 type Step = 1 | 2 | 3 | 4;
 
 const STEP_LABELS: Record<Step, string> = {
-  1: "Upload",
-  2: "Quiz",
-  3: "Results",
-  4: "Done",
+  1: "1 · Upload",
+  2: "2 · Answer",
+  3: "3 · Score",
+  4: "4 · Cleared",
 };
 
 type CourseSession = {
@@ -400,35 +400,37 @@ export function CodeQuizGrader() {
     : null;
 
   return (
-    <div className="mx-auto max-w-[560px] px-5 pb-20 pt-14 sm:pt-20">
-      <header className="pf-hero mb-10">
-        <div className="mb-6 flex flex-wrap items-center gap-2">
-          <span className="cqg-trust">Course check</span>
-          {course?.isDevSim && <span className="cqg-trust">Pilot</span>}
-        </div>
-
+    <div className="mx-auto max-w-[540px] px-5 pb-24 pt-12 sm:pt-16">
+      <header className="pf-hero mb-9">
         <p className="pf-brand">Preflight</p>
 
-        {course ? (
-          <p className="mt-4 text-[0.95rem] text-[var(--ink-2)]">
-            {course.assignmentTitle}
-            {course.courseTitle ? ` · ${course.courseTitle}` : ""}
-          </p>
-        ) : null}
-
-        <p className="mt-4 max-w-[28rem] text-[1.05rem] leading-relaxed text-[var(--ink-2)]">
-          Drop in the code for this lab. Pass a short quiz built from{" "}
-          <em className="text-[var(--ink)]">your</em> file, then you’re cleared
-          to submit.
+        <p className="mt-5 max-w-[26rem] text-[1.08rem] leading-[1.55] text-[var(--ink-2)]">
+          Show you understand the code you wrote. Pass once at 100% — then
+          submit your lab.
         </p>
 
-        <div className="mt-7 flex items-center justify-between gap-3">
+        {course && (
+          <div className="mt-5 rounded-xl border border-[var(--line)] bg-white/80 px-3.5 py-2.5">
+            <p className="text-[13px] font-semibold tracking-tight text-[var(--ink)]">
+              {course.assignmentTitle.replace(/\s*·\s*/g, " · ")}
+            </p>
+            <p className="mt-0.5 text-[12px] text-[var(--ink-3)]">
+              {course.courseTitle}
+              {course.userName ? ` · ${course.userName}` : ""}
+              {course.isDevSim ? " · demo" : ""}
+            </p>
+          </div>
+        )}
+
+        <div className="mt-7 flex items-center justify-between gap-3 border-b border-[var(--line)] pb-4">
           <span className="pf-step">
             <span className="pf-step-dot" aria-hidden />
             {STEP_LABELS[step]}
           </span>
           {ollamaLine && (
-            <span className="text-[11px] text-[var(--ink-3)]">{ollamaLine}</span>
+            <span className="hidden text-[11px] text-[var(--ink-3)] sm:inline">
+              {ollamaLine}
+            </span>
           )}
         </div>
       </header>
@@ -460,11 +462,31 @@ export function CodeQuizGrader() {
               busy && "pointer-events-none opacity-70",
             )}
           >
-            <p className="mb-1.5 text-[1.05rem] font-semibold tracking-tight text-[var(--ink)]">
-              Drop your files here
+            <div
+              className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-white text-[var(--brand)] shadow-sm ring-1 ring-[var(--line)]"
+              aria-hidden
+            >
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <path
+                  d="M10 13.5V3.5M10 3.5L6.5 7M10 3.5L13.5 7"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M3.5 12.5V14.5C3.5 15.6046 4.39543 16.5 5.5 16.5H14.5C15.6046 16.5 16.5 15.6046 16.5 14.5V12.5"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </div>
+            <p className="mb-1.5 text-[1.08rem] font-semibold tracking-tight text-[var(--ink)]">
+              Upload your lab files
             </p>
             <span className="text-sm text-[var(--ink-3)]">
-              or click to browse · .py .c .js .java and more
+              Drag & drop, or click to browse
             </span>
           </div>
           <input
@@ -484,7 +506,7 @@ export function CodeQuizGrader() {
               disabled={busy}
               onClick={loadSample}
             >
-              Try sample
+              Use sample instead
             </Button>
             {busy && (
               <span className="flex items-center gap-2 text-[13px] text-[var(--ink-3)]">
@@ -631,10 +653,10 @@ export function CodeQuizGrader() {
       {step === 3 && (
         <section>
           <div className="pf-panel">
-            <p className="mb-4 text-sm text-[var(--ink-2)]">
+            <p className="mb-4 text-sm leading-relaxed text-[var(--ink-2)]">
               {perfect
-                ? "Every answer correct. Mark complete, then submit the real assignment in your course."
-                : "You need 100% on every question. Try a new quiz — no penalty."}
+                ? "Nice — you got everything right. Mark this complete, then turn in the real lab."
+                : "You need a perfect score to continue. Retries don’t cost anything."}
             </p>
             <div className="mb-5 rounded-xl border border-[var(--line)] bg-[#f8f9fc] px-4 py-4">
               <div className="text-[2.1rem] font-semibold tracking-tight leading-none text-[var(--ink)]">

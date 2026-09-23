@@ -12,7 +12,7 @@ export default function PilotPage() {
   const [userName, setUserName] = useState("Alex Student");
   const [courseTitle, setCourseTitle] = useState("CSc 1301 — Principles of CS I");
   const [assignmentTitle, setAssignmentTitle] = useState(
-    "Lab 3 · Code understanding check",
+    "Lab 3 understanding check",
   );
   const [busy, setBusy] = useState(false);
 

@@ -20,9 +20,9 @@ export default function TryPage() {
       email: "student@university.edu",
       roles: "Learner",
       context_id: "demo-course",
-      context_title: "Demo course",
-      resource_link_id: "pre-submit-check",
-      resource_link_title: "Before you submit · code understanding check",
+      context_title: "CSc 1301",
+      resource_link_id: "lab-preflight",
+      resource_link_title: "Lab 3 understanding check",
       launch_presentation_return_url: "http://127.0.0.1:43127/",
     };
     for (const [k, v] of Object.entries(fields)) {
