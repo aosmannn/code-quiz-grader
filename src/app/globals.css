@@ -76,7 +76,8 @@
   --secondary-foreground: #0c1222;
   --muted: #eef0f4;
   --muted-foreground: #5b6578;
-  --accent-color: #eef2ff;
+  --accent: #eef0f4;
+  --accent-foreground: #0c1222;
   --destructive: #c62828;
   --border: #e4e7ee;
   --input: #e4e7ee;
@@ -165,8 +166,8 @@
 
 .pf-drop:hover,
 .pf-drop.over {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--line-2));
-  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--brand) 55%, var(--line-2));
+  background: var(--brand-soft);
   transform: translateY(-1px);
   box-shadow: 0 16px 30px -24px rgba(47, 91, 255, 0.55);
 }
@@ -192,7 +193,7 @@
   width: 0.45rem;
   height: 0.45rem;
   border-radius: 999px;
-  background: var(--accent);
+  background: var(--brand);
   box-shadow: 0 0 0 4px rgba(47, 91, 255, 0.12);
 }
 

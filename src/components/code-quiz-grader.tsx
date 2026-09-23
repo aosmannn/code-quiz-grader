@@ -636,17 +636,17 @@ export function CodeQuizGrader() {
                 ? "Every answer correct. Mark complete, then submit the real assignment in your course."
                 : "You need 100% on every question. Try a new quiz — no penalty."}
             </p>
-            <div className="mb-5 rounded-lg border border-[var(--line)] bg-[#fafafa] px-4 py-4">
-              <div className="text-[2rem] font-semibold leading-none text-[var(--ink)]">
+            <div className="mb-5 rounded-xl border border-[var(--line)] bg-[#f8f9fc] px-4 py-4">
+              <div className="text-[2.1rem] font-semibold tracking-tight leading-none text-[var(--ink)]">
                 {grand} / {grandMax}
               </div>
               <div
                 className={cn(
-                  "mt-1 text-sm",
-                  perfect ? "text-[var(--ink)]" : "text-[var(--ink-2)]",
+                  "mt-2 text-sm font-medium",
+                  perfect ? "text-[var(--green)]" : "text-[var(--ink-2)]",
                 )}
               >
-                {perfect ? "100%" : "Not quite 100% yet"}
+                {perfect ? "Ready to clear" : "Need 100% to continue"}
               </div>
             </div>
 
@@ -722,7 +722,7 @@ export function CodeQuizGrader() {
       {step === 4 && submitResult && (
         <section>
           <div className="pf-panel">
-            <h2 className="text-xl font-semibold text-[var(--ink)]">
+            <h2 className="text-[1.5rem] font-semibold tracking-tight text-[var(--ink)]">
               Cleared to submit
             </h2>
             <p className="mt-2 text-sm text-[var(--ink-2)]">
