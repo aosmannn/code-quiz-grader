@@ -164,12 +164,12 @@ function scoreOneFa(answer: string, question: string, files: SourceFile[]): FaSc
   let feedback: string;
   if (score >= 8) {
     feedback =
-      "Demo grading: strong answer — specific, grounded in the submitted code, and shows solid understanding.";
+      "Strong answer — specific, grounded in your code, and shows solid understanding. Nice work.";
   } else if (score >= 4) {
-    feedback = `Demo grading: partial credit. You addressed "${question.slice(0, 60)}…" but could tie claims more tightly to identifiers or control flow in the upload.`;
+    feedback = `Partial credit. You addressed "${question.slice(0, 60)}…" — try tying claims more tightly to identifiers or control flow in your upload. You can retry anytime.`;
   } else {
     feedback =
-      "Demo grading: limited evidence of understanding. Add concrete references to functions, variables, or steps from the uploaded files.";
+      "Keep going. Add concrete references to functions, variables, or steps from your files — unlimited retries, no penalty.";
   }
 
   return { id: 0, score, feedback };

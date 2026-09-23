@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
-import { callClaude, parseModelJson, resolveApiKey } from "@/lib/claude";
 import { gradeMockFa } from "@/lib/mock-quiz";
+import {
+  buildGradePrompt,
+  callOllama,
+  getOllamaStatus,
+  normalizeFaScores,
+  parseModelJson,
+} from "@/lib/ollama";
 import type { FaAnswer, FaScored, SourceFile } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -9,6 +15,8 @@ type Body = {
   files: SourceFile[];
   faAnswers: FaAnswer[];
   mock?: boolean;
+  offline?: boolean;
+  model?: string;
 };
 
 export async function POST(req: Request) {
@@ -21,50 +29,67 @@ export async function POST(req: Request) {
     }
 
     if (faAnswers.length === 0) {
-      return NextResponse.json({ fa_scores: [] as FaScored[], mode: "local" as const });
+      return NextResponse.json({
+        fa_scores: [] as FaScored[],
+        mode: "offline" as const,
+        model: null,
+      });
     }
 
     if (!Array.isArray(files) || files.length === 0) {
-      return NextResponse.json({ error: "Missing source files." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing source files." },
+        { status: 400 },
+      );
     }
 
-    // Explicit mock / demo always wins — never call Claude on that path.
-    if (body.mock === true) {
+    const forceOffline = body.mock === true || body.offline === true;
+    if (forceOffline) {
       const fa_scores = gradeMockFa(faAnswers, files);
-      return NextResponse.json({ fa_scores, mode: "mock" as const });
+      return NextResponse.json({
+        fa_scores,
+        mode: "offline" as const,
+        model: null,
+      });
     }
 
-    const headerKey = req.headers.get("x-api-key");
-    const apiKey = resolveApiKey(headerKey);
-    if (!apiKey) {
+    const status = await getOllamaStatus(body.model);
+    if (!status.ok || !status.selected) {
       const fa_scores = gradeMockFa(faAnswers, files);
-      return NextResponse.json({ fa_scores, mode: "mock" as const });
+      return NextResponse.json({
+        fa_scores,
+        mode: "offline" as const,
+        model: null,
+        notice:
+          "Ollama unavailable — used local heuristic grading so you still get feedback.",
+      });
     }
 
-    const code = files
-      .map((f) => `=== ${f.name} ===\n${f.content.slice(0, 3000)}`)
-      .join("\n\n");
-    const qaPairs = faAnswers
-      .map((a) => `Q: ${a.question}\nAnswer: ${a.answer}`)
-      .join("\n\n");
-    const template = faAnswers
-      .map((a) => `{"id":${a.id},"score":0,"feedback":"..."}`)
-      .join(",");
-
-    const prompt =
-      `You are grading a student's free-answer quiz about this code:\n\n${code}\n\n` +
-      `Questions and student answers:\n\n${qaPairs}\n\n` +
-      `Score each answer 0–10 based on accuracy, completeness, and understanding. ` +
-      `Provide concise, constructive feedback for each. ` +
-      `Return ONLY valid JSON, no markdown fences:\n{"fa_scores":[${template}]}`;
-
-    const raw = await callClaude({
-      apiKey: apiKey!,
-      prompt,
-      maxTokens: Math.max(1000, faAnswers.length * 250),
-    });
-    const parsed = parseModelJson<{ fa_scores: FaScored[] }>(raw);
-    return NextResponse.json({ fa_scores: parsed.fa_scores, mode: "claude" as const });
+    try {
+      const prompt = buildGradePrompt(files, faAnswers);
+      const raw = await callOllama({
+        model: status.selected,
+        prompt,
+        numPredict: Math.max(800, faAnswers.length * 220),
+      });
+      const parsed = parseModelJson<{ fa_scores: FaScored[] }>(raw);
+      const fa_scores = normalizeFaScores(parsed.fa_scores || [], faAnswers);
+      return NextResponse.json({
+        fa_scores,
+        mode: "ollama" as const,
+        model: status.selected,
+      });
+    } catch (ollamaErr) {
+      const fa_scores = gradeMockFa(faAnswers, files);
+      const message =
+        ollamaErr instanceof Error ? ollamaErr.message : "Ollama failed";
+      return NextResponse.json({
+        fa_scores,
+        mode: "offline" as const,
+        model: null,
+        notice: `Local model hiccup (${message}). Used offline grading instead.`,
+      });
+    }
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to grade answers";
     return NextResponse.json({ error: message }, { status: 500 });

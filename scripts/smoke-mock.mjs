@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * End-to-end mock-mode smoke test against the running dev server.
- * No Anthropic key; asserts generate → grade → scores.
+ * Offline-mode smoke test against the running production server.
+ * Forces offline generate + grade (no Ollama required).
  */
 const BASE = process.env.BASE_URL || "http://127.0.0.1:43127";
 
@@ -21,6 +21,17 @@ const sample = {
 async function main() {
   const home = await fetch(BASE);
   if (!home.ok) throw new Error(`GET / => ${home.status}`);
+  const html = await home.text();
+  if (!/Runs on your laptop|Code Quiz Grader/i.test(html)) {
+    throw new Error("home HTML missing local-first trust copy");
+  }
+
+  const status = await fetch(`${BASE}/api/ollama/status`);
+  const statusBody = await status.json();
+  if (!status.ok) throw new Error(`ollama status: ${JSON.stringify(statusBody)}`);
+  if (typeof statusBody.ok !== "boolean" || !statusBody.base) {
+    throw new Error(`bad status shape: ${JSON.stringify(statusBody)}`);
+  }
 
   const gen = await fetch(`${BASE}/api/generate`, {
     method: "POST",
@@ -30,11 +41,14 @@ async function main() {
       mcCount: 3,
       faCount: 2,
       mock: true,
+      offline: true,
     }),
   });
   const genBody = await gen.json();
   if (!gen.ok) throw new Error(`generate: ${JSON.stringify(genBody)}`);
-  if (genBody.mode !== "mock") throw new Error(`expected mock mode, got ${genBody.mode}`);
+  if (genBody.mode !== "offline" && genBody.mode !== "mock") {
+    throw new Error(`expected offline mode, got ${genBody.mode}`);
+  }
   if (genBody.quiz.mc.length !== 3 || genBody.quiz.fa.length !== 2) {
     throw new Error(`bad counts: ${JSON.stringify(genBody.quiz)}`);
   }
@@ -53,29 +67,41 @@ async function main() {
   const grade = await fetch(`${BASE}/api/grade`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ files: [sample], faAnswers, mock: true }),
+    body: JSON.stringify({
+      files: [sample],
+      faAnswers,
+      mock: true,
+      offline: true,
+    }),
   });
   const gradeBody = await grade.json();
   if (!grade.ok) throw new Error(`grade: ${JSON.stringify(gradeBody)}`);
-  if (gradeBody.mode !== "mock") throw new Error(`grade mode ${gradeBody.mode}`);
+  if (gradeBody.mode !== "offline" && gradeBody.mode !== "mock") {
+    throw new Error(`grade mode ${gradeBody.mode}`);
+  }
   if (gradeBody.fa_scores.length !== 2) throw new Error("missing FA scores");
   for (const s of gradeBody.fa_scores) {
-    if (typeof s.score !== "number" || s.score < 0 || s.score > 10 || !s.feedback) {
+    if (
+      typeof s.score !== "number" ||
+      s.score < 0 ||
+      s.score > 10 ||
+      !s.feedback
+    ) {
       throw new Error(`bad score row ${JSON.stringify(s)}`);
     }
   }
 
-  // MC local compare sanity
   const mc = genBody.quiz.mc[0];
-  const correct = mc.answer === "A" ? 1 : 0;
-  if (correct !== 1) throw new Error("expected sample MC answer A");
+  if (mc.answer !== "A") throw new Error("expected sample MC answer A");
 
   console.log(
     JSON.stringify(
       {
         ok: true,
         base: BASE,
-        mode: "mock",
+        mode: genBody.mode,
+        ollamaOk: statusBody.ok,
+        ollamaModel: statusBody.selected,
         mc: genBody.quiz.mc.length,
         fa: genBody.quiz.fa.length,
         faScores: gradeBody.fa_scores.map((s) => s.score),
