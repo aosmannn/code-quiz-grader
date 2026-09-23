@@ -1,17 +1,10 @@
-# Code Quiz Grader
+# Code Understanding Quiz (iCollege course tool)
 
-Prove you understand **your own** uploaded code — entirely on your laptop.
+Students open this from **iCollege (D2L)** as a course assignment — not a public website.
 
-Upload source → configure a short quiz → answer → see an understanding score against a threshold (default ~82%). Unlimited retries, no penalty. Nothing is sent to Anthropic, OpenAI, or other cloud LLM APIs.
+Upload code → local understanding quiz on the student’s laptop → clear threshold → **turn in** to the course. Unlimited retries. **No Ollama, no cloud LLM, no API keys, no student installs.**
 
-## How it runs (local-first)
-
-1. **Ollama** (preferred) at `http://127.0.0.1:11434` generates questions and grades free-answer responses with a local model.
-2. If Ollama isn’t ready, the app falls back to an **offline heuristic** question generator so the full UI still works for practice.
-
-No API keys. No accounts. No cloud AI on the happy path.
-
-## Setup
+## Try tonight (localhost)
 
 ```bash
 npm install
@@ -19,34 +12,41 @@ npm run build
 npm run start
 ```
 
-Open [http://127.0.0.1:43127](http://127.0.0.1:43127). Prefer `build` + `start` for a reliable session.
+1. Open the **pilot simulator**: [http://127.0.0.1:43127/pilot](http://127.0.0.1:43127/pilot)
+2. Click **Launch assignment from course**
+3. Load sample / upload → quiz → clear threshold → **I’m ready to turn in**
+4. See **Submitted to course** (AGS stub + local completion record)
 
-### Optional: local model via Ollama
+Quiz app: [http://127.0.0.1:43127](http://127.0.0.1:43127)
+
+## How students run it
+
+Open the assignment link **inside iCollege**. Complete the quiz in the browser. Nothing else to install.
+
+## LTI endpoints (D2L registration)
+
+| Purpose | URL |
+| --- | --- |
+| OpenID Connect login | `{BASE}/lti/login` |
+| Launch / redirect | `{BASE}/lti/launch` |
+| JWKS | `{BASE}/lti/jwks` |
+| Dev simulator | `{BASE}/pilot` |
+
+Copy `.env.example` → `.env.local` and set:
+
+- `LTI_TOOL_BASE_URL` — public HTTPS origin D2L can reach
+- `LTI_ISSUER`, `LTI_CLIENT_ID`, `LTI_DEPLOYMENT_ID`, `LTI_PLATFORM_JWKS_URL` — from D2L
+- `LTI_TOOL_PRIVATE_KEY_PEM`, `LTI_TOOL_KEY_ID` — tool keypair for AGS client assertions
+
+**Tonight:** launch parse → session cookie → quiz → submit stub works end-to-end via `/pilot`.  
+**Next wire-up:** verify `id_token` against platform JWKS; POST real AGS scores when `lineItemUrl` + tool key exist.
+
+## Smoke
 
 ```bash
-# Install from https://ollama.com , then:
-ollama serve
-ollama pull llama3.2:1b   # or qwen2.5:1.5b / phi3:mini
+node scripts/smoke-mock.mjs
 ```
-
-Refresh status in the app. When a model is detected, generate/grade use it automatically.
-
-## Smoke tests
-
-```bash
-node scripts/smoke-mock.mjs   # force offline generate + grade
-node scripts/e2e-mock.mjs     # browser loop (needs playwright)
-```
-
-## Flow
-
-1. Upload one or more source files (or load the sample `grade_book.py`)
-2. Choose total question count (2–30)
-3. Choose MC vs free-answer mix
-4. Generate quiz (Ollama or offline)
-5. Answer and submit
-6. See understanding % vs threshold → retry or start over
 
 ## Stack
 
-Next.js (App Router), TypeScript, Tailwind CSS, shadcn/ui, Ollama (optional).
+Next.js, TypeScript, Tailwind, shadcn/ui. On-device heuristic quiz engine. LTI 1.3 scaffolding + AGS stub.

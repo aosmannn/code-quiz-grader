@@ -15,9 +15,9 @@ const sans = Source_Sans_3({
 });
 
 export const metadata: Metadata = {
-  title: "Code Quiz Grader",
+  title: "Code understanding check · course assignment",
   description:
-    "Prove you understand your own code — quizzes run on your laptop with Ollama, no cloud API keys.",
+    "Course tool opened from iCollege — prove you understand your own code on your laptop. No cloud AI, no extra installs.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

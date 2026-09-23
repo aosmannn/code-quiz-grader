@@ -20,18 +20,29 @@ const ACCEPT =
 
 const DEFAULT_THRESHOLD = 82;
 const THRESHOLD_KEY = "cqg_threshold";
+const COMPLETION_KEY = "cqg_completions";
 
-type Step = 1 | 2 | 3 | 4 | 5;
-type Mode = "ollama" | "offline" | null;
+type Step = 1 | 2 | 3 | 4 | 5 | 6;
 
-type OllamaStatus = {
+type CourseSession = {
+  sessionId: string;
+  isDevSim: boolean;
+  userName: string;
+  courseTitle: string;
+  assignmentTitle: string;
+  returnUrl?: string;
+};
+
+type SubmitResult = {
   ok: boolean;
-  base: string;
-  models: string[];
-  selected: string | null;
+  mode: "ags" | "stub";
   message: string;
-  installHint: string;
-  pullHint: string;
+  completionId: string;
+  submittedAt: string;
+  gradePassback: {
+    scoreGiven: number;
+    scoreMaximum: number;
+  };
 };
 
 function fmtBytes(b: number) {
@@ -41,9 +52,16 @@ function fmtBytes(b: number) {
 }
 
 function ProgressTrack({ step }: { step: Step }) {
-  const labels = ["Upload", "How many", "Mix", "Quiz", "Results"] as const;
+  const labels = [
+    "Upload",
+    "How many",
+    "Mix",
+    "Quiz",
+    "Results",
+    "Turn in",
+  ] as const;
   return (
-    <div className="mb-8 hidden items-center sm:flex">
+    <div className="mb-8 hidden items-center lg:flex">
       {labels.map((label, idx) => {
         const n = (idx + 1) as Step;
         const done = n < step;
@@ -52,7 +70,7 @@ function ProgressTrack({ step }: { step: Step }) {
           <div key={label} className="flex flex-1 items-center last:flex-none">
             <div
               className={cn(
-                "flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold",
+                "flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold",
                 active && "text-[var(--ink)]",
                 done && "text-[var(--green)]",
                 !active && !done && "text-[var(--ink-3)]",
@@ -60,7 +78,7 @@ function ProgressTrack({ step }: { step: Step }) {
             >
               <span
                 className={cn(
-                  "flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border text-[10px] font-bold transition-colors",
+                  "flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border text-[10px] font-bold",
                   active &&
                     "border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]",
                   done && "border-[var(--green)] bg-[var(--green)] text-white",
@@ -85,10 +103,9 @@ function ProgressTrack({ step }: { step: Step }) {
 
 export function CodeQuizGrader() {
   const [step, setStep] = useState<Step>(1);
-  const [forceOffline, setForceOffline] = useState(false);
-  const [ollama, setOllama] = useState<OllamaStatus | null>(null);
-  const [ollamaChecking, setOllamaChecking] = useState(true);
+  const [course, setCourse] = useState<CourseSession | null>(null);
   const [threshold, setThreshold] = useState(DEFAULT_THRESHOLD);
+  const [attempt, setAttempt] = useState(0);
   const [files, setFiles] = useState<
     { name: string; size: number; content: string }[]
   >([]);
@@ -100,38 +117,15 @@ export function CodeQuizGrader() {
     {},
   );
   const [faAnswers, setFaAnswers] = useState<Record<number, string>>({});
-  const [mode, setMode] = useState<Mode>(null);
-  const [modelUsed, setModelUsed] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [busyLabel, setBusyLabel] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [mcResults, setMcResults] = useState<McScored[]>([]);
   const [faResults, setFaResults] = useState<FaScored[]>([]);
   const [faAnswerRows, setFaAnswerRows] = useState<FaAnswer[]>([]);
+  const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const refreshOllama = useCallback(async () => {
-    setOllamaChecking(true);
-    try {
-      const res = await fetch("/api/ollama/status");
-      const data = (await res.json()) as OllamaStatus;
-      setOllama(data);
-    } catch {
-      setOllama({
-        ok: false,
-        base: "http://127.0.0.1:11434",
-        models: [],
-        selected: null,
-        message: "Couldn’t reach the local status check.",
-        installHint: "Install Ollama from https://ollama.com , then run: ollama serve",
-        pullHint: "Pull a small model: ollama pull llama3.2:1b",
-      });
-    } finally {
-      setOllamaChecking(false);
-    }
-  }, []);
 
   useEffect(() => {
     const stored = localStorage.getItem(THRESHOLD_KEY);
@@ -139,11 +133,25 @@ export function CodeQuizGrader() {
       const n = parseInt(stored, 10);
       if (n >= 50 && n <= 100) setThreshold(n);
     }
-    void refreshOllama();
-  }, [refreshOllama]);
-
-  const ollamaReady = Boolean(ollama?.ok && ollama.selected) && !forceOffline;
-  const usingOffline = forceOffline || !ollamaReady;
+    void (async () => {
+      try {
+        const res = await fetch("/api/lti/session");
+        const data = await res.json();
+        if (data.session) {
+          setCourse({
+            sessionId: data.session.sessionId,
+            isDevSim: Boolean(data.session.isDevSim),
+            userName: data.session.userName,
+            courseTitle: data.session.courseTitle,
+            assignmentTitle: data.session.assignmentTitle,
+            returnUrl: data.session.returnUrl,
+          });
+        }
+      } catch {
+        /* open without launch is ok for local file checks */
+      }
+    })();
+  }, []);
 
   const faCount = useMemo(() => {
     if (mcCount === null || totalQ === 0) return null;
@@ -196,11 +204,6 @@ export function CodeQuizGrader() {
     else setTotalQ(0);
   };
 
-  const enterSplit = () => {
-    setMcCount(null);
-    go(3);
-  };
-
   const onThreshold = (v: string) => {
     const n = parseInt(v, 10);
     if (n >= 50 && n <= 100) {
@@ -209,16 +212,11 @@ export function CodeQuizGrader() {
     }
   };
 
-  const generateQuiz = async () => {
+  const generateQuiz = async (nextAttempt = attempt) => {
     if (mcCount === null || faCount === null) return;
     setBusy(true);
-    setBusyLabel(
-      usingOffline
-        ? `Building ${totalQ} offline questions…`
-        : `Asking your local model for ${totalQ} questions…`,
-    );
+    setBusyLabel(`Building ${totalQ} questions from your code…`);
     setError(null);
-    setNotice(null);
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
@@ -227,18 +225,16 @@ export function CodeQuizGrader() {
           files: sourceFiles,
           mcCount,
           faCount,
-          offline: usingOffline,
-          model: ollama?.selected || undefined,
+          attempt: nextAttempt,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Generate failed");
       setQuizData(data.quiz as QuizData);
-      setMode(data.mode === "ollama" ? "ollama" : "offline");
-      setModelUsed(data.model || null);
-      if (data.notice) setNotice(data.notice);
+      setAttempt(nextAttempt);
       setMcChosen({});
       setFaAnswers({});
+      setSubmitResult(null);
       go(4);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Generate failed");
@@ -260,11 +256,7 @@ export function CodeQuizGrader() {
     }
 
     setBusy(true);
-    setBusyLabel(
-      usingOffline || mode === "offline"
-        ? "Scoring with local heuristics…"
-        : "Local model is reading your answers…",
-    );
+    setBusyLabel("Scoring your answers on this device…");
     setError(null);
     try {
       const mcScored: McScored[] = mcList.map((q, i) => {
@@ -293,16 +285,11 @@ export function CodeQuizGrader() {
           body: JSON.stringify({
             files: sourceFiles,
             faAnswers: faPayload,
-            offline: usingOffline || mode === "offline",
-            model: ollama?.selected || undefined,
           }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Grade failed");
         faScored = data.fa_scores as FaScored[];
-        if (data.mode) setMode(data.mode === "ollama" ? "ollama" : "offline");
-        if (data.model) setModelUsed(data.model);
-        if (data.notice) setNotice(data.notice);
       }
 
       setMcResults(mcScored);
@@ -311,6 +298,84 @@ export function CodeQuizGrader() {
       go(5);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Grade failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const mcTotal = mcResults.reduce((s, a) => s + a.score, 0);
+  const mcMax = mcResults.length;
+  const faTotal = faResults.reduce((s, a) => s + a.score, 0);
+  const faMax = faResults.length * 10;
+  const grand = mcTotal + faTotal;
+  const grandMax = mcMax + faMax;
+  const understandingPct =
+    grandMax > 0 ? Math.round((grand / grandMax) * 100) : 0;
+  const passed = understandingPct >= threshold;
+
+  const turnIn = async () => {
+    if (!passed) return;
+    setBusy(true);
+    setBusyLabel("Submitting to your course…");
+    setError(null);
+    try {
+      if (!course) {
+        // Local completion without LTI session still records success for UX
+        const completionId = `local_${Date.now().toString(36)}`;
+        const submittedAt = new Date().toISOString();
+        const local: SubmitResult = {
+          ok: true,
+          mode: "stub",
+          message:
+            "Marked complete on this device. Open from iCollege (or /pilot) to attach a course session for grade passback.",
+          completionId,
+          submittedAt,
+          gradePassback: {
+            scoreGiven: understandingPct,
+            scoreMaximum: 100,
+          },
+        };
+        const prev = JSON.parse(localStorage.getItem(COMPLETION_KEY) || "[]");
+        prev.unshift({
+          ...local,
+          courseTitle: "Local practice",
+          assignmentTitle: "Understanding check",
+          files: files.map((f) => f.name),
+        });
+        localStorage.setItem(COMPLETION_KEY, JSON.stringify(prev.slice(0, 20)));
+        setSubmitResult(local);
+        go(6);
+        return;
+      }
+
+      const res = await fetch("/api/lti/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: course.sessionId,
+          understandingPct,
+          threshold,
+          pointsEarned: grand,
+          pointsPossible: grandMax || 100,
+          fileNames: files.map((f) => f.name),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Submit failed");
+      const result = data.result as SubmitResult;
+      const prev = JSON.parse(localStorage.getItem(COMPLETION_KEY) || "[]");
+      prev.unshift({
+        ...result,
+        courseTitle: course.courseTitle,
+        assignmentTitle: course.assignmentTitle,
+        userName: course.userName,
+        files: files.map((f) => f.name),
+      });
+      localStorage.setItem(COMPLETION_KEY, JSON.stringify(prev.slice(0, 20)));
+      setSubmitResult(result);
+      go(6);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Submit failed");
     } finally {
       setBusy(false);
     }
@@ -327,9 +392,8 @@ export function CodeQuizGrader() {
     setMcResults([]);
     setFaResults([]);
     setFaAnswerRows([]);
-    setMode(null);
-    setModelUsed(null);
-    setNotice(null);
+    setSubmitResult(null);
+    setAttempt(0);
     setError(null);
     setBusy(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -342,143 +406,92 @@ export function CodeQuizGrader() {
     setMcResults([]);
     setFaResults([]);
     setFaAnswerRows([]);
-    setNotice(null);
+    setSubmitResult(null);
     setError(null);
     go(3);
   };
-
-  const mcTotal = mcResults.reduce((s, a) => s + a.score, 0);
-  const mcMax = mcResults.length;
-  const faTotal = faResults.reduce((s, a) => s + a.score, 0);
-  const faMax = faResults.length * 10;
-  const grand = mcTotal + faTotal;
-  const grandMax = mcMax + faMax;
-  const understandingPct =
-    grandMax > 0 ? Math.round((grand / grandMax) * 100) : 0;
-  const passed = understandingPct >= threshold;
 
   return (
     <div className="mx-auto max-w-[720px] px-4 pb-24 pt-10 sm:pt-14">
       <header className="cqg-hero-mark mb-8">
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <span className="cqg-trust">Runs on your laptop · no cloud</span>
-          {ollamaReady ? (
-            <span className="rounded-full border border-[var(--line)] bg-[var(--sky-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--sky)]">
-              Ollama · {ollama?.selected}
-            </span>
-          ) : (
-            <span className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink-3)]">
-              Offline practice mode
-            </span>
-          )}
+          <span className="cqg-trust">Course assignment · runs on your laptop</span>
+          <span className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink-3)]">
+            No cloud AI · no extra installs
+          </span>
         </div>
-        <h1
-          className="mb-2 text-[2.15rem] leading-[1.1] font-semibold tracking-tight text-[var(--ink)] sm:text-[2.55rem]"
-          style={{ fontFamily: "var(--font-display), serif" }}
-        >
-          Code Quiz Grader
-        </h1>
-        <p className="max-w-xl text-[1.02rem] leading-relaxed text-[var(--ink-2)]">
-          Upload the program you wrote, answer questions about{" "}
-          <em>your</em> code, and reach the understanding threshold before your
-          work is ready to hand in. Unlimited retries — no penalty.
-        </p>
-      </header>
 
-      {/* Local runtime panel */}
-      <div className="cqg-card mb-6">
-        <div className="cqg-card-title">Your local setup</div>
-        <p className="cqg-card-sub">
-          Questions and free-answer grading stay on this Mac. Nothing is sent to
-          Anthropic, OpenAI, or other cloud APIs.
-        </p>
-
-        {ollamaChecking ? (
-          <p className="flex items-center gap-2 text-sm text-[var(--ink-3)]">
-            <span className="cqg-spin" /> Checking Ollama…
-          </p>
-        ) : ollamaReady ? (
-          <div className="rounded-xl border border-[color-mix(in_srgb,var(--green)_30%,var(--line))] bg-[var(--green-soft)] px-4 py-3 text-sm text-[var(--ink)]">
-            <strong className="font-semibold">{ollama?.message}</strong>
-            <p className="mt-1 text-[13px] text-[var(--ink-2)]">
-              Available models: {(ollama?.models || []).join(", ") || "—"}
-            </p>
+        {course ? (
+          <div className="mb-5 rounded-2xl border border-[color-mix(in_srgb,var(--green)_28%,var(--line))] bg-[var(--green-soft)] px-4 py-3">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--green)]">
+              Opened from your class
+              {course.isDevSim ? " · pilot simulator" : ""}
+            </div>
+            <div
+              className="mt-1 text-lg font-semibold tracking-tight"
+              style={{ fontFamily: "var(--font-display), serif" }}
+            >
+              {course.assignmentTitle}
+            </div>
+            <div className="text-sm text-[var(--ink-2)]">
+              {course.courseTitle}
+              {course.userName ? ` · ${course.userName}` : ""}
+            </div>
           </div>
         ) : (
-          <div className="space-y-3 rounded-xl border border-[var(--line)] bg-[var(--sky-soft)]/60 px-4 py-3 text-sm">
-            <p className="font-medium text-[var(--ink)]">
-              {ollama?.message || "Ollama isn’t ready yet."}
-            </p>
-            <p className="text-[13px] text-[var(--ink-2)]">
-              You can still use the full flow with the offline question
-              generator. For smarter, code-aware quizzes, install a local model:
-            </p>
-            <ol className="list-decimal space-y-1.5 pl-5 text-[13px] text-[var(--ink-2)]">
-              <li>{ollama?.installHint}</li>
-              <li>
-                <code className="rounded bg-[var(--surface)] px-1.5 py-0.5 font-mono text-[12px]">
-                  {ollama?.pullHint?.replace(/^Pull a small model:\s*/i, "") ||
-                    "ollama pull llama3.2:1b"}
-                </code>
-              </li>
-              <li>Click Refresh below — then generate again.</li>
-            </ol>
+          <div className="mb-5 rounded-2xl border border-[var(--line)] bg-[var(--sky-soft)]/70 px-4 py-3 text-sm text-[var(--ink-2)]">
+            This is a <strong>course tool</strong>, not a public website. For the
+            real pilot, students open it from iCollege. To try tonight:{" "}
+            <a className="font-semibold text-[var(--sky)] underline" href="/pilot">
+              /pilot
+            </a>{" "}
+            launch simulator.
           </div>
         )}
 
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-8"
-            onClick={() => void refreshOllama()}
-          >
-            Refresh Ollama status
-          </Button>
-          <Button
-            type="button"
-            variant={forceOffline ? "default" : "outline"}
-            size="sm"
-            className="h-8"
-            onClick={() => setForceOffline((v) => !v)}
-          >
-            {forceOffline ? "Using offline generator" : "Force offline generator"}
-          </Button>
-        </div>
+        <h1
+          className="mb-2 text-[2.05rem] leading-[1.1] font-semibold tracking-tight text-[var(--ink)] sm:text-[2.4rem]"
+          style={{ fontFamily: "var(--font-display), serif" }}
+        >
+          Code understanding check
+        </h1>
+        <p className="max-w-xl text-[1.02rem] leading-relaxed text-[var(--ink-2)]">
+          Upload the program you wrote for this assignment, answer questions
+          about <em>your</em> code, clear the understanding threshold, then turn
+          it in to your course. Unlimited retries — no penalty.
+        </p>
+      </header>
 
-        <div className="mt-5 border-t border-[var(--line)] pt-4">
-          <label className="mb-2 block text-[13px] font-semibold text-[var(--ink-2)]">
-            Understanding threshold · {threshold}%
-          </label>
-          <div className="flex flex-wrap items-center gap-3">
-            <input
-              type="range"
-              min={50}
-              max={100}
-              step={1}
-              value={threshold}
-              onChange={(e) => onThreshold(e.target.value)}
-              className="h-2 w-full max-w-xs accent-[var(--green)]"
-              aria-label="Understanding threshold percent"
-            />
-            <span className="text-[13px] text-[var(--ink-3)]">
-              Suggested 80–85%. You can retry until you clear it.
-            </span>
-          </div>
-        </div>
+      <div className="cqg-card mb-6">
+        <div className="cqg-card-title">Understanding threshold</div>
+        <p className="cqg-card-sub">
+          Aim for about 80–85%. Questions are built from symbols in your upload
+          on this device — nothing is sent to a cloud LLM.
+        </p>
+        <label className="mb-2 block text-[13px] font-semibold text-[var(--ink-2)]">
+          Pass at {threshold}%
+        </label>
+        <input
+          type="range"
+          min={50}
+          max={100}
+          step={1}
+          value={threshold}
+          onChange={(e) => onThreshold(e.target.value)}
+          className="h-2 w-full max-w-xs accent-[var(--green)]"
+          aria-label="Understanding threshold percent"
+        />
       </div>
 
       <ProgressTrack step={step} />
 
-      {/* Step 1 — Upload */}
       {step === 1 && (
         <section>
           <div className="cqg-card">
-            <div className="cqg-card-title">Start with your code</div>
+            <div className="cqg-card-title">Upload your assignment code</div>
             <p className="cqg-card-sub">
-              Drop the files you want to demonstrate understanding of — or load
-              the sample grade book to try the loop in under a minute.
+              Drop the files for this lab — or load the sample to walk the full
+              course flow.
             </p>
             <div
               role="button"
@@ -552,27 +565,23 @@ export function CodeQuizGrader() {
               </div>
             )}
           </div>
-          <div className="mt-1 flex flex-wrap gap-3">
-            <Button
-              type="button"
-              disabled={files.length === 0}
-              className="h-10 px-4"
-              onClick={() => go(2)}
-            >
-              Continue
-            </Button>
-          </div>
+          <Button
+            type="button"
+            disabled={files.length === 0}
+            className="mt-1 h-10 px-4"
+            onClick={() => go(2)}
+          >
+            Continue
+          </Button>
         </section>
       )}
 
-      {/* Step 2 — Total */}
       {step === 2 && (
         <section>
           <div className="cqg-card">
             <div className="cqg-card-title">How many questions?</div>
             <p className="cqg-card-sub">
-              A short quiz is enough for most labs. You can always retry with a
-              fresh set.
+              Short is fine. You can retry with a fresh set anytime.
             </p>
             <div className="mb-3 flex flex-wrap gap-2">
               {[5, 8, 10, 15].map((n) => (
@@ -591,7 +600,7 @@ export function CodeQuizGrader() {
                 </button>
               ))}
             </div>
-            <div className="mt-2 flex items-center gap-2">
+            <div className="flex items-center gap-2">
               <Input
                 type="number"
                 min={2}
@@ -601,9 +610,7 @@ export function CodeQuizGrader() {
                 onChange={(e) => onCustomTotal(e.target.value)}
                 className="h-9 w-24 bg-[var(--surface)]"
               />
-              <span className="text-[13px] text-[var(--ink-3)]">
-                questions (2 – 30)
-              </span>
+              <span className="text-[13px] text-[var(--ink-3)]">2 – 30</span>
             </div>
           </div>
           <div className="mt-1 flex flex-wrap gap-3">
@@ -611,7 +618,10 @@ export function CodeQuizGrader() {
               type="button"
               disabled={totalQ < 2}
               className="h-10 px-4"
-              onClick={enterSplit}
+              onClick={() => {
+                setMcCount(null);
+                go(3);
+              }}
             >
               Continue
             </Button>
@@ -622,14 +632,12 @@ export function CodeQuizGrader() {
         </section>
       )}
 
-      {/* Step 3 — Split */}
       {step === 3 && (
         <section>
           <div className="cqg-card">
             <div className="cqg-card-title">Choose your mix</div>
             <p className="cqg-card-sub">
-              You&apos;ve chosen <strong>{totalQ}</strong> questions. Pick how
-              many should be multiple-choice — the rest are free-answer.
+              <strong>{totalQ}</strong> questions total — how many multiple-choice?
             </p>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
@@ -643,10 +651,10 @@ export function CodeQuizGrader() {
                       type="button"
                       onClick={() => setMcCount(i)}
                       className={cn(
-                        "rounded-full border px-3.5 py-1 text-[13px] font-semibold transition-colors",
+                        "rounded-full border px-3.5 py-1 text-[13px] font-semibold",
                         mcCount === i
                           ? "border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]"
-                          : "border-[var(--line-2)] bg-[var(--surface)] text-[var(--ink-2)] hover:border-[var(--green)]",
+                          : "border-[var(--line-2)] bg-[var(--surface)] text-[var(--ink-2)]",
                       )}
                     >
                       {i}
@@ -665,29 +673,6 @@ export function CodeQuizGrader() {
                   {faCount === null ? "—" : faCount}
                 </div>
               </div>
-              <div
-                className={cn(
-                  "text-xs sm:col-span-2",
-                  mcCount !== null && mcCount === 0 && faCount === 0
-                    ? "text-red-600"
-                    : "text-[var(--ink-3)]",
-                )}
-              >
-                {mcCount === null
-                  ? ""
-                  : mcCount === 0 && faCount === 0
-                    ? "Select at least 1 question."
-                    : [
-                        mcCount > 0
-                          ? `${mcCount} multiple-choice (1 pt each)`
-                          : null,
-                        (faCount ?? 0) > 0
-                          ? `${faCount} free-answer (0–10 pts each)`
-                          : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" + ")}
-              </div>
             </div>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-3">
@@ -699,16 +684,11 @@ export function CodeQuizGrader() {
                 (mcCount === 0 && (faCount ?? 0) === 0) ||
                 busy
               }
-              onClick={() => void generateQuiz()}
+              onClick={() => void generateQuiz(attempt)}
             >
-              {usingOffline ? "Generate offline quiz" : "Generate local quiz"}
+              Generate quiz
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={busy}
-              onClick={() => go(2)}
-            >
+            <Button type="button" variant="outline" disabled={busy} onClick={() => go(2)}>
               Back
             </Button>
             {busy && (
@@ -722,102 +702,87 @@ export function CodeQuizGrader() {
         </section>
       )}
 
-      {/* Step 4 — Quiz */}
       {step === 4 && (
         <section>
           <div className="cqg-card">
             <div className="cqg-card-title">
               Show what you know
               <span className="ml-2 text-base font-normal text-[var(--ink-3)]">
-                · {mode === "ollama" ? `local · ${modelUsed}` : "offline quiz"}
+                · on-device
+                {attempt > 0 ? ` · attempt ${attempt + 1}` : ""}
               </span>
             </div>
             <p className="cqg-card-sub">
-              Take your time. This is about understanding your code — not speed.
+              Questions reference symbols from your upload.
             </p>
-            {notice && (
-              <div className="mb-4 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-[13px] text-[var(--ink-2)]">
-                {notice}
-              </div>
+            {(quizData.mc?.length ?? 0) > 0 && (
+              <>
+                <div className="cqg-section-head">Multiple-choice</div>
+                {quizData.mc.map((q, i) => (
+                  <div key={q.id} className="mb-5">
+                    <div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-[var(--sky)]">
+                      MC · {i + 1} of {quizData.mc.length}
+                    </div>
+                    <div className="mb-2.5 text-[15px] leading-relaxed">
+                      {q.question}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      {(["A", "B", "C", "D"] as const).map((k) => {
+                        const chosen = mcChosen[i] === k;
+                        return (
+                          <label
+                            key={k}
+                            className={cn(
+                              "flex cursor-pointer items-start gap-2.5 rounded-xl border px-3.5 py-2.5",
+                              chosen
+                                ? "border-[var(--green)] bg-[var(--green-soft)]"
+                                : "border-[var(--line)] hover:border-[var(--green)]",
+                            )}
+                          >
+                            <input
+                              type="radio"
+                              name={`mc-${i}`}
+                              checked={chosen}
+                              onChange={() =>
+                                setMcChosen((prev) => ({ ...prev, [i]: k }))
+                              }
+                              className="mt-0.5 accent-[var(--green)]"
+                            />
+                            <span className="text-sm">
+                              <strong>{k}.</strong> {q.options[k]}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </>
             )}
-            <div>
-              {(quizData.mc?.length ?? 0) > 0 && (
-                <>
-                  <div className="cqg-section-head">
-                    Multiple-choice — 1 point each
-                  </div>
-                  {quizData.mc.map((q, i) => (
-                    <div key={q.id} className="mb-5 last:mb-0">
-                      <div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-[var(--sky)]">
-                        MC · {i + 1} of {quizData.mc.length}
-                      </div>
-                      <div className="mb-2.5 text-[15px] leading-relaxed">
-                        {q.question}
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        {(["A", "B", "C", "D"] as const).map((k) => {
-                          const chosen = mcChosen[i] === k;
-                          return (
-                            <label
-                              key={k}
-                              className={cn(
-                                "flex cursor-pointer items-start gap-2.5 rounded-xl border px-3.5 py-2.5 transition-colors",
-                                chosen
-                                  ? "border-[var(--green)] bg-[var(--green-soft)]"
-                                  : "border-[var(--line)] hover:border-[var(--green)] hover:bg-[var(--green-soft)]/40",
-                              )}
-                            >
-                              <input
-                                type="radio"
-                                name={`mc-${i}`}
-                                value={k}
-                                checked={chosen}
-                                onChange={() =>
-                                  setMcChosen((prev) => ({ ...prev, [i]: k }))
-                                }
-                                className="mt-0.5 accent-[var(--green)]"
-                              />
-                              <span className="text-sm leading-snug">
-                                <strong>{k}.</strong> {q.options[k]}
-                              </span>
-                            </label>
-                          );
-                        })}
-                      </div>
+            {(quizData.fa?.length ?? 0) > 0 && (
+              <>
+                <div className="cqg-section-head">Free-answer</div>
+                {quizData.fa.map((q, i) => (
+                  <div key={q.id} className="mb-5">
+                    <div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-[var(--green)]">
+                      FA · {i + 1} of {quizData.fa.length}
                     </div>
-                  ))}
-                </>
-              )}
-              {(quizData.fa?.length ?? 0) > 0 && (
-                <>
-                  <div className="cqg-section-head">
-                    Free-answer — scored 0–10 each
-                  </div>
-                  {quizData.fa.map((q, i) => (
-                    <div key={q.id} className="mb-5 last:mb-0">
-                      <div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-[var(--green)]">
-                        FA · {i + 1} of {quizData.fa.length}
-                      </div>
-                      <div className="mb-2.5 text-[15px] leading-relaxed">
-                        {q.question}
-                      </div>
-                      <Textarea
-                        rows={3}
-                        placeholder="Explain in your own words — name functions and variables from your code…"
-                        value={faAnswers[i] || ""}
-                        onChange={(e) =>
-                          setFaAnswers((prev) => ({
-                            ...prev,
-                            [i]: e.target.value,
-                          }))
-                        }
-                        className="min-h-[96px] resize-y bg-[var(--surface)] text-sm leading-relaxed"
-                      />
+                    <div className="mb-2.5 text-[15px] leading-relaxed">
+                      {q.question}
                     </div>
-                  ))}
-                </>
-              )}
-            </div>
+                    <Textarea
+                      rows={3}
+                      placeholder="Name functions and variables from your code…"
+                      value={faAnswers[i] || ""}
+                      onChange={(e) =>
+                        setFaAnswers((prev) => ({ ...prev, [i]: e.target.value }))
+                      }
+                      className="min-h-[96px] bg-[var(--surface)] text-sm"
+                    />
+                  </div>
+                ))}
+              </>
+            )}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-3">
             <Button
@@ -826,14 +791,9 @@ export function CodeQuizGrader() {
               disabled={busy}
               onClick={() => void submitAnswers()}
             >
-              Submit answers
+              Check understanding
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={busy}
-              onClick={() => go(3)}
-            >
+            <Button type="button" variant="outline" disabled={busy} onClick={() => go(3)}>
               Back
             </Button>
             {busy && (
@@ -847,17 +807,15 @@ export function CodeQuizGrader() {
         </section>
       )}
 
-      {/* Step 5 — Results */}
       {step === 5 && (
         <section>
           <div className="cqg-card">
             <div className="cqg-card-title">Your understanding score</div>
             <p className="cqg-card-sub">
               {passed
-                ? "You cleared the threshold — nice work. You’re ready to hand this in when your course asks."
-                : "Not quite there yet — that’s okay. Retry with a fresh quiz anytime. No penalty."}
+                ? "You cleared the threshold — you can turn this in to your course."
+                : "Not there yet — try a new quiz anytime. No penalty."}
             </p>
-
             <div className="mb-5 rounded-2xl border border-[var(--line)] bg-[var(--paper)]/70 px-4 py-4">
               <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
                 <div>
@@ -865,7 +823,7 @@ export function CodeQuizGrader() {
                     Understanding
                   </div>
                   <div
-                    className="text-[2.4rem] font-semibold leading-none tracking-tight"
+                    className="text-[2.4rem] font-semibold leading-none"
                     style={{ fontFamily: "var(--font-display), serif" }}
                   >
                     {understandingPct}%
@@ -879,7 +837,7 @@ export function CodeQuizGrader() {
                       passed ? "text-[var(--green)]" : "text-[var(--amber)]",
                     )}
                   >
-                    {passed ? "Threshold met" : "Keep practicing"}
+                    {passed ? "Ready to turn in" : "Keep practicing"}
                   </div>
                 </div>
               </div>
@@ -889,14 +847,7 @@ export function CodeQuizGrader() {
                   style={{ width: `${Math.min(100, understandingPct)}%` }}
                 />
               </div>
-              <div className="relative mt-1 h-3">
-                <div
-                  className="absolute top-0 h-3 w-px bg-[var(--ink)]"
-                  style={{ left: `${threshold}%` }}
-                  title={`Threshold ${threshold}%`}
-                />
-              </div>
-              <div className="mt-2 flex flex-wrap gap-2 text-xs">
+              <div className="mt-3 flex flex-wrap gap-2 text-xs">
                 {mcMax > 0 && (
                   <span className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-0.5 font-medium text-[var(--sky)]">
                     MC {mcTotal}/{mcMax}
@@ -907,143 +858,107 @@ export function CodeQuizGrader() {
                     FA {faTotal}/{faMax}
                   </span>
                 )}
-                <span className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-0.5 font-medium text-[var(--ink-3)]">
-                  {mode === "ollama"
-                    ? `Graded by ${modelUsed}`
-                    : "Offline local grading"}
-                </span>
               </div>
             </div>
 
-            {notice && (
-              <div className="mb-4 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-[13px] text-[var(--ink-2)]">
-                {notice}
-              </div>
-            )}
-
-            {mcMax > 0 && (
-              <div className="mb-6">
-                <div className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--ink-3)]">
-                  Multiple-choice — {mcTotal} / {mcMax}
+            {mcResults.map((a) => (
+              <div key={a.id} className="border-b border-[var(--line)] py-3 text-sm">
+                <div className="font-medium">{a.question}</div>
+                <div className="mt-1 text-xs text-[var(--ink-3)]">
+                  {a.score === 1 ? "Correct" : `Not quite · answer ${a.correct}`}
                 </div>
-                {mcResults.map((a) => {
-                  const ok = a.score === 1;
-                  return (
-                    <div
-                      key={a.id}
-                      className="border-b border-[var(--line)] py-3.5 last:border-b-0"
-                    >
-                      <div className="mb-1.5 flex items-start justify-between gap-3">
-                        <div className="flex-1 text-sm font-medium leading-snug">
-                          {a.question}
-                        </div>
-                        <span
-                          className={cn(
-                            "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold",
-                            ok
-                              ? "bg-[var(--green-soft)] text-[var(--green)]"
-                              : "bg-red-50 text-red-700",
-                          )}
-                        >
-                          {ok ? "Correct" : "Not quite"}
-                        </span>
-                      </div>
-                      <div className="mb-1 text-xs text-[var(--ink-3)]">
-                        Your answer:{" "}
-                        <span className="text-[var(--ink-2)]">
-                          {a.chosen} — {a.options[a.chosen]}
-                        </span>
-                      </div>
-                      {!ok && (
-                        <div className="text-xs text-[var(--ink-3)]">
-                          Correct:{" "}
-                          <span className="text-[var(--ink-2)]">
-                            {a.correct} — {a.options[a.correct]}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
               </div>
-            )}
-
-            {faMax > 0 && (
-              <div className="mb-6">
-                <div className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--ink-3)]">
-                  Free-answer — {faTotal} / {faMax}
+            ))}
+            {faResults.map((s, i) => (
+              <div key={s.id} className="border-b border-[var(--line)] py-3 text-sm">
+                <div className="flex justify-between gap-3">
+                  <div className="font-medium">{faAnswerRows[i]?.question}</div>
+                  <div className="font-semibold">{s.score}/10</div>
                 </div>
-                {faResults.map((s, i) => {
-                  const cls =
-                    s.score >= 8 ? "full" : s.score >= 4 ? "mid" : "zero";
-                  const pct = (s.score / 10) * 100;
-                  const color =
-                    cls === "full"
-                      ? "text-[var(--green)]"
-                      : cls === "mid"
-                        ? "text-[var(--amber)]"
-                        : "text-red-700";
-                  const bar =
-                    cls === "full"
-                      ? "bg-[var(--green)]"
-                      : cls === "mid"
-                        ? "bg-[var(--amber)]"
-                        : "bg-red-600";
-                  return (
-                    <div
-                      key={s.id}
-                      className="border-b border-[var(--line)] py-3.5 last:border-b-0"
-                    >
-                      <div className="mb-1.5 flex items-start justify-between gap-3">
-                        <div className="flex-1 text-sm font-medium leading-snug">
-                          {faAnswerRows[i]?.question}
-                        </div>
-                        <div
-                          className={cn(
-                            "text-base font-semibold whitespace-nowrap",
-                            color,
-                          )}
-                        >
-                          {s.score}/10
-                        </div>
-                      </div>
-                      <div className="mb-1.5 h-[3px] overflow-hidden rounded-sm bg-[var(--line)]">
-                        <div
-                          className={cn("h-full rounded-sm", bar)}
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                      <div className="mb-1 text-xs text-[var(--ink-3)]">
-                        Your answer:{" "}
-                        <span className="text-[var(--ink-2)]">
-                          {faAnswerRows[i]?.answer}
-                        </span>
-                      </div>
-                      <div className="text-[13px] leading-relaxed text-[var(--ink-2)]">
-                        {s.feedback}
-                      </div>
-                    </div>
-                  );
-                })}
+                <div className="mt-1 text-[13px] text-[var(--ink-2)]">{s.feedback}</div>
               </div>
+            ))}
+          </div>
+          <div className="mt-1 flex flex-wrap gap-3">
+            {passed ? (
+              <Button
+                type="button"
+                className="h-10 px-4"
+                disabled={busy}
+                onClick={() => void turnIn()}
+              >
+                I&apos;m ready to turn in
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                className="h-10 px-4"
+                disabled={busy}
+                onClick={() => {
+                  retryQuiz();
+                  void generateQuiz(attempt + 1);
+                }}
+              >
+                Try a new quiz
+              </Button>
             )}
+            <Button type="button" variant="outline" onClick={resetAll}>
+              Start over
+            </Button>
+            {busy && (
+              <span className="flex items-center gap-2 text-[13px] text-[var(--ink-3)]">
+                <span className="cqg-spin" />
+                {busyLabel}
+              </span>
+            )}
+          </div>
+          {error && <div className="cqg-err mt-2.5">{error}</div>}
+        </section>
+      )}
 
-            <div className="mt-2 flex items-center justify-between border-t border-[var(--ink)]/20 pt-4">
-              <span className="text-[15px] font-semibold">Points</span>
-              <span
-                className="text-[28px] font-semibold tracking-tight"
+      {step === 6 && submitResult && (
+        <section>
+          <div className="cqg-card">
+            <div className="cqg-card-title">Submitted to course</div>
+            <p className="cqg-card-sub">{submitResult.message}</p>
+            <div className="rounded-2xl border border-[color-mix(in_srgb,var(--green)_30%,var(--line))] bg-[var(--green-soft)] px-4 py-4">
+              <div
+                className="text-2xl font-semibold"
                 style={{ fontFamily: "var(--font-display), serif" }}
               >
-                {grand} / {grandMax}
-              </span>
+                {submitResult.gradePassback.scoreGiven}% understanding
+              </div>
+              <div className="mt-2 text-sm text-[var(--ink-2)]">
+                Completion ID{" "}
+                <code className="rounded bg-[var(--surface)] px-1.5 py-0.5 text-[12px]">
+                  {submitResult.completionId}
+                </code>
+              </div>
+              <div className="mt-1 text-sm text-[var(--ink-2)]">
+                {new Date(submitResult.submittedAt).toLocaleString()} · mode{" "}
+                {submitResult.mode}
+              </div>
+              {course && (
+                <div className="mt-3 text-sm text-[var(--ink-2)]">
+                  {course.assignmentTitle}
+                  <br />
+                  {course.courseTitle}
+                </div>
+              )}
             </div>
           </div>
           <div className="mt-1 flex flex-wrap gap-3">
-            <Button type="button" className="h-10 px-4" onClick={retryQuiz}>
-              Try a new quiz
-            </Button>
+            {course?.returnUrl ? (
+              <Button type="button" className="h-10 px-4" asChild>
+                <a href={course.returnUrl}>Return to course</a>
+              </Button>
+            ) : (
+              <Button type="button" className="h-10 px-4" asChild>
+                <a href="/pilot">Back to pilot simulator</a>
+              </Button>
+            )}
             <Button type="button" variant="outline" onClick={resetAll}>
-              Start over
+              Practice again
             </Button>
           </div>
         </section>
