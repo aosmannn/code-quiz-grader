@@ -52,14 +52,11 @@ export default function PilotPage() {
   return (
     <main className="cqg-shell min-h-screen text-[var(--ink)]">
       <div className="mx-auto max-w-[640px] px-4 py-14">
-        <p className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-[var(--ink-3)]">
-          Instructor / Adam · local only
+        <p className="mb-3 text-sm text-[var(--ink-3)]">
+          Instructor · local only
         </p>
-        <h1
-          className="mb-3 text-[2.2rem] font-semibold tracking-tight"
-          style={{ fontFamily: "var(--font-display), serif" }}
-        >
-          iCollege launch simulator
+        <h1 className="mb-3 text-[1.75rem] font-semibold tracking-tight">
+          Launch simulator
         </h1>
         <p className="mb-8 text-[1.02rem] leading-relaxed text-[var(--ink-2)]">
           Pretend a student clicked the assignment link in iCollege before

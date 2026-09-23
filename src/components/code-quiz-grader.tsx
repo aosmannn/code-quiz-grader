@@ -509,7 +509,7 @@ export function CodeQuizGrader() {
         <section>
           <div className="pf-panel">
             {notice && (
-              <div className="mb-4 rounded-lg border border-[var(--line)] bg-[#101820] px-3 py-2 text-[13px] text-[var(--ink-2)]">
+              <div className="mb-4 rounded-lg border border-[var(--line)] bg-[#fafafa] px-3 py-2 text-[13px] text-[var(--ink-2)]">
                 {notice}
               </div>
             )}
@@ -629,17 +629,14 @@ export function CodeQuizGrader() {
                 ? "Every answer correct. Mark complete, then submit the real assignment in your course."
                 : "You need 100% on every question. Try a new quiz — no penalty."}
             </p>
-            <div className="mb-5 rounded-lg border border-[var(--line)] bg-[#101820] px-4 py-4">
-              <div
-                className="text-[2rem] font-extrabold leading-none text-[var(--ink)]"
-                style={displayFont}
-              >
+            <div className="mb-5 rounded-lg border border-[var(--line)] bg-[#fafafa] px-4 py-4">
+              <div className="text-[2rem] font-semibold leading-none text-[var(--ink)]">
                 {grand} / {grandMax}
               </div>
               <div
                 className={cn(
-                  "mt-1 text-sm font-medium",
-                  perfect ? "text-[var(--signal)]" : "text-[var(--amber)]",
+                  "mt-1 text-sm",
+                  perfect ? "text-[var(--ink)]" : "text-[var(--ink-2)]",
                 )}
               >
                 {perfect ? "100%" : "Not quite 100% yet"}
@@ -654,8 +651,8 @@ export function CodeQuizGrader() {
                 <div className="font-medium">{a.question}</div>
                 <div
                   className={cn(
-                    "mt-1 text-xs font-semibold",
-                    a.score === 1 ? "text-[var(--signal)]" : "text-red-400",
+                    "mt-1 text-xs",
+                    a.score === 1 ? "text-[var(--ink-2)]" : "text-red-600",
                   )}
                 >
                   {a.score === 1
@@ -701,12 +698,7 @@ export function CodeQuizGrader() {
                 Try a new quiz
               </Button>
             )}
-            <Button
-              type="button"
-              variant="outline"
-              onClick={resetAll}
-              className="border-[var(--line-2)] bg-transparent"
-            >
+            <Button type="button" variant="outline" onClick={resetAll}>
               Start over
             </Button>
             {busy && (
@@ -723,19 +715,13 @@ export function CodeQuizGrader() {
       {step === 4 && submitResult && (
         <section>
           <div className="pf-panel">
-            <h2
-              className="text-xl font-bold text-[var(--signal)]"
-              style={displayFont}
-            >
+            <h2 className="text-xl font-semibold text-[var(--ink)]">
               Cleared to submit
             </h2>
             <p className="mt-2 text-sm text-[var(--ink-2)]">
               {submitResult.message}
             </p>
-            <p
-              className="mt-4 font-mono text-xs text-[var(--ink-3)]"
-              style={{ fontFamily: "var(--font-mono), monospace" }}
-            >
+            <p className="mt-4 font-mono text-xs text-[var(--ink-3)]">
               {submitResult.completionId}
               <br />
               {new Date(submitResult.submittedAt).toLocaleString()}
@@ -751,11 +737,7 @@ export function CodeQuizGrader() {
               type="button"
               variant={course?.returnUrl ? "outline" : "default"}
               onClick={resetAll}
-              className={
-                course?.returnUrl
-                  ? "border-[var(--line-2)] bg-transparent"
-                  : "h-10 px-4"
-              }
+              className="h-10 px-4"
             >
               {course?.returnUrl ? "Practice again" : "Start another check"}
             </Button>

@@ -3,10 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 
-/**
- * One-click student entry for demos / classmates.
- * Same LTI launch path as /pilot, without instructor form fields.
- */
 export default function TryPage() {
   const [busy, setBusy] = useState(false);
   const started = useRef(false);
@@ -43,29 +39,19 @@ export default function TryPage() {
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    // Auto-start so the shared link feels like one click from the course.
     const t = window.setTimeout(() => launch(), 400);
     return () => window.clearTimeout(t);
   }, []);
 
   return (
-    <main className="pf-shell min-h-screen text-[var(--ink)]">
-      <div className="mx-auto max-w-[560px] px-4 py-16 text-center">
-        <p
-          className="mb-3 text-xs font-bold uppercase tracking-[0.22em] text-[var(--signal)]"
-          style={{ fontFamily: "var(--font-display), sans-serif" }}
-        >
-          Preflight
-        </p>
-        <h1
-          className="mb-3 text-[2rem] font-extrabold tracking-tight"
-          style={{ fontFamily: "var(--font-display), sans-serif" }}
-        >
-          Opening Preflight…
+    <main className="min-h-screen bg-white text-[#111]">
+      <div className="mx-auto max-w-md px-4 py-16 text-center">
+        <p className="mb-2 text-sm text-[#888]">Preflight</p>
+        <h1 className="mb-3 text-2xl font-semibold tracking-tight">
+          Opening…
         </h1>
-        <p className="mb-8 text-[1.02rem] leading-relaxed text-[var(--ink-2)]">
-          Upload the code for your assignment, pass the short quiz, then you’re
-          cleared to submit the real lab in iCollege.
+        <p className="mb-8 text-[#555]">
+          Upload your code, pass the quiz, then submit your lab.
         </p>
         <Button
           type="button"
