@@ -44,15 +44,10 @@ export default function TryPage() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-white text-[#111]">
-      <div className="mx-auto max-w-md px-4 py-16 text-center">
-        <p className="mb-2 text-sm text-[#888]">Preflight</p>
-        <h1 className="mb-3 text-2xl font-semibold tracking-tight">
-          Opening…
-        </h1>
-        <p className="mb-8 text-[#555]">
-          Upload your code, pass the quiz, then submit your lab.
-        </p>
+    <main className="pf-shell">
+      <div className="mx-auto max-w-md px-5 py-20 text-center">
+        <p className="pf-brand mb-4">Preflight</p>
+        <p className="mb-8 text-[var(--ink-2)]">Opening your check…</p>
         <Button
           type="button"
           className="h-10 px-4"
