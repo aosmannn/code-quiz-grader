@@ -33,7 +33,7 @@ export default function PilotPage() {
         context_title: courseTitle,
         resource_link_id: "lab3-understanding",
         resource_link_title: assignmentTitle,
-        launch_presentation_return_url: "http://127.0.0.1:43127/check",
+        launch_presentation_return_url: "http://127.0.0.1:43127/",
       };
       for (const [k, v] of Object.entries(fields)) {
         const input = document.createElement("input");

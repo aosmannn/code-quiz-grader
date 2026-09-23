@@ -1,9 +1,5 @@
-import { CodeQuizGrader } from "@/components/code-quiz-grader";
+import { redirect } from "next/navigation";
 
 export default function CheckPage() {
-  return (
-    <main className="pf-shell">
-      <CodeQuizGrader />
-    </main>
-  );
+  redirect("/");
 }

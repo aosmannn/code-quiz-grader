@@ -1,8 +1,8 @@
 # Preflight · code understanding check (iCollege course tool)
 
-**Preflight** is the pre-submit clearance students run from **iCollege (D2L)** on the assignment — not a public website.
+**Preflight** is the pre-submit check students run from **iCollege (D2L)** on the assignment — not a public website.
 
-**Student flow:** assignment link → upload their code → quiz from *their* symbols (Symbol Radar) → **100%** → clearance stamp → **cleared to submit** the real lab. Miss any question → fresh quiz, no penalty. **No cloud LLM / API keys.** Students don’t install Ollama — the course host runs it for the pilot.
+**Student flow:** assignment link → upload their code → short quiz from *their* code → **100%** → mark complete → **cleared to submit** the real lab. Miss any question → fresh quiz, no penalty. **No cloud LLM / API keys.** Students don’t install Ollama — the course host runs it for the pilot.
 
 ## Try tonight (localhost)
 
@@ -14,12 +14,11 @@ npm run start
 
 | Who | Link |
 | --- | --- |
-| **Student desk (home)** | [http://127.0.0.1:43127/](http://127.0.0.1:43127/) |
-| **Lab bench (quiz flow)** | [http://127.0.0.1:43127/check](http://127.0.0.1:43127/check) |
+| **Preflight (home)** | [http://127.0.0.1:43127/](http://127.0.0.1:43127/) |
 | **Student one-click** | [http://127.0.0.1:43127/try](http://127.0.0.1:43127/try) |
 | Instructor simulator | [http://127.0.0.1:43127/pilot](http://127.0.0.1:43127/pilot) |
 
-LTI launch redirects to `/check`. `/try` auto-launches a demo session into the lab bench.
+LTI launch redirects to `/`. `/try` auto-launches a demo session on the home page.
 
 ## How students run it (eventual iCollege)
 
@@ -38,7 +37,7 @@ LTI launch redirects to `/check`. `/try` auto-launches a demo session into the l
 | Purpose | URL |
 | --- | --- |
 | OpenID Connect login | `{BASE}/lti/login` |
-| Launch / redirect | `{BASE}/lti/launch` → `/check` |
+| Launch / redirect | `{BASE}/lti/launch` → `/` |
 | JWKS | `{BASE}/lti/jwks` |
 | Student try link | `{BASE}/try` |
 | Dev simulator | `{BASE}/pilot` |

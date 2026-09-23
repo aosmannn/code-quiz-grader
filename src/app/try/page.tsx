@@ -27,7 +27,7 @@ export default function TryPage() {
       context_title: "Demo course",
       resource_link_id: "pre-submit-check",
       resource_link_title: "Before you submit · code understanding check",
-      launch_presentation_return_url: "http://127.0.0.1:43127/check",
+      launch_presentation_return_url: "http://127.0.0.1:43127/",
     };
     for (const [k, v] of Object.entries(fields)) {
       const input = document.createElement("input");
@@ -61,7 +61,7 @@ export default function TryPage() {
           className="mb-3 text-[2rem] font-extrabold tracking-tight"
           style={{ fontFamily: "var(--font-display), sans-serif" }}
         >
-          Opening your lab bench…
+          Opening Preflight…
         </h1>
         <p className="mb-8 text-[1.02rem] leading-relaxed text-[var(--ink-2)]">
           Upload the code for your assignment, pass the short quiz, then you’re
