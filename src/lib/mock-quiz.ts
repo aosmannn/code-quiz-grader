@@ -344,12 +344,12 @@ function scoreOneFa(answer: string, question: string, files: SourceFile[]): FaSc
     ...summary.fileList.map((n) => n.replace(/\.[^.]+$/, "")),
   ].filter((sym) => sym && lower.includes(sym.toLowerCase())).length;
 
-  let score = 2;
-  if (text.length >= 40) score += 2;
-  if (text.length >= 120) score += 2;
-  if (tokens.length >= 20) score += 1;
-  if (symbolHits > 0) score += 2;
-  if (symbolHits > 2) score += 1;
+  let score = 1;
+  if (text.length >= 30) score += 2;
+  if (text.length >= 80) score += 2;
+  if (tokens.length >= 12) score += 1;
+  if (symbolHits > 0) score += 3;
+  if (symbolHits > 1) score += 2;
 
   const codeWords = new Set(
     codeBlob
@@ -359,19 +359,22 @@ function scoreOneFa(answer: string, question: string, files: SourceFile[]): FaSc
   );
   const overlap = tokens.filter((t) => codeWords.has(t)).length;
   if (overlap >= 2) score += 1;
-  if (overlap >= 5) score += 1;
+  if (overlap >= 4) score += 1;
+
+  // Perfect when the student clearly names their symbols and explains
+  if (symbolHits >= 1 && text.length >= 60 && overlap >= 2) score = 10;
 
   score = Math.max(0, Math.min(10, score));
 
   let feedback: string;
-  if (score >= 8) {
-    feedback = `Strong answer — you grounded it in symbols from \`${summary.primaryName}\`. That shows real understanding.`;
+  if (score >= 10) {
+    feedback = `Full credit — you named symbols from \`${summary.primaryName}\` and explained the idea clearly.`;
   } else if (score >= 4) {
-    feedback = `Partial credit on “${question.slice(0, 52)}…”. Name concrete pieces like \`${summary.primarySymbol}\`${
+    feedback = `Not full credit yet on “${question.slice(0, 52)}…”. Name \`${summary.primarySymbol}\`${
       summary.defNames[0] ? ` or \`${summary.defNames[0]}\`` : ""
-    } and explain the steps. You can retry anytime.`;
+    } and explain the steps in a few sentences, then retry.`;
   } else {
-    feedback = `Keep going. Mention identifiers from your upload (e.g. \`${summary.primarySymbol}\`) and describe what they do — unlimited retries, no penalty.`;
+    feedback = `Keep going. Mention identifiers from your upload (e.g. \`${summary.primarySymbol}\`) and describe what they do — you can try a fresh quiz anytime.`;
   }
 
   return { id: 0, score, feedback };

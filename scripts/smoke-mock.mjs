@@ -24,6 +24,9 @@ async function main() {
   if (!/Course assignment|Opened from your class|course tool|Code understanding/i.test(html)) {
     throw new Error("home HTML missing course-tool framing");
   }
+  if (/Understanding threshold|Aim for about 80|80–85%|80-85%/i.test(html)) {
+    throw new Error("page still shows threshold / 80-85% UI");
+  }
   if (/ollama serve|ollama pull|Install Ollama/i.test(html)) {
     throw new Error("page still mentions Ollama install UX");
   }

@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { SAMPLE_PROGRAM } from "@/lib/sample-program";
@@ -18,11 +17,13 @@ import type {
 const ACCEPT =
   ".py,.js,.ts,.jsx,.tsx,.java,.c,.cpp,.cs,.go,.rb,.rs,.txt,.html,.css,.php,.swift,.kt,.r,.m,.sh,.json,.xml,.yaml,.yml,.sql,.lua,.scala";
 
-const DEFAULT_THRESHOLD = 82;
-const THRESHOLD_KEY = "cqg_threshold";
+/** Sensible default under the hood — students never configure this. */
+const DEFAULT_MC = 4;
+const DEFAULT_FA = 2;
+
 const COMPLETION_KEY = "cqg_completions";
 
-type Step = 1 | 2 | 3 | 4 | 5 | 6;
+type Step = 1 | 2 | 3 | 4;
 
 type CourseSession = {
   sessionId: string;
@@ -52,16 +53,9 @@ function fmtBytes(b: number) {
 }
 
 function ProgressTrack({ step }: { step: Step }) {
-  const labels = [
-    "Upload",
-    "How many",
-    "Mix",
-    "Quiz",
-    "Results",
-    "Turn in",
-  ] as const;
+  const labels = ["Upload", "Quiz", "Results", "Turn in"] as const;
   return (
-    <div className="mb-8 hidden items-center lg:flex">
+    <div className="mb-8 hidden items-center sm:flex">
       {labels.map((label, idx) => {
         const n = (idx + 1) as Step;
         const done = n < step;
@@ -70,7 +64,7 @@ function ProgressTrack({ step }: { step: Step }) {
           <div key={label} className="flex flex-1 items-center last:flex-none">
             <div
               className={cn(
-                "flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold",
+                "flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold",
                 active && "text-[var(--ink)]",
                 done && "text-[var(--green)]",
                 !active && !done && "text-[var(--ink-3)]",
@@ -104,14 +98,10 @@ function ProgressTrack({ step }: { step: Step }) {
 export function CodeQuizGrader() {
   const [step, setStep] = useState<Step>(1);
   const [course, setCourse] = useState<CourseSession | null>(null);
-  const [threshold, setThreshold] = useState(DEFAULT_THRESHOLD);
   const [attempt, setAttempt] = useState(0);
   const [files, setFiles] = useState<
     { name: string; size: number; content: string }[]
   >([]);
-  const [totalQ, setTotalQ] = useState(0);
-  const [customTotal, setCustomTotal] = useState("");
-  const [mcCount, setMcCount] = useState<number | null>(null);
   const [quizData, setQuizData] = useState<QuizData>({ mc: [], fa: [] });
   const [mcChosen, setMcChosen] = useState<Record<number, McQuestion["answer"]>>(
     {},
@@ -126,13 +116,9 @@ export function CodeQuizGrader() {
   const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const autoGenLock = useRef(false);
 
   useEffect(() => {
-    const stored = localStorage.getItem(THRESHOLD_KEY);
-    if (stored) {
-      const n = parseInt(stored, 10);
-      if (n >= 50 && n <= 100) setThreshold(n);
-    }
     void (async () => {
       try {
         const res = await fetch("/api/lti/session");
@@ -148,15 +134,10 @@ export function CodeQuizGrader() {
           });
         }
       } catch {
-        /* open without launch is ok for local file checks */
+        /* ok without launch */
       }
     })();
   }, []);
-
-  const faCount = useMemo(() => {
-    if (mcCount === null || totalQ === 0) return null;
-    return totalQ - mcCount;
-  }, [mcCount, totalQ]);
 
   const sourceFiles: SourceFile[] = useMemo(
     () => files.map((f) => ({ name: f.name, content: f.content })),
@@ -169,9 +150,60 @@ export function CodeQuizGrader() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
+  const generateQuiz = useCallback(
+    async (fileList: SourceFile[], nextAttempt: number) => {
+      if (fileList.length === 0 || autoGenLock.current) return;
+      autoGenLock.current = true;
+      setBusy(true);
+      setBusyLabel("Building your quiz from the uploaded code…");
+      setError(null);
+      try {
+        const res = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            files: fileList,
+            mcCount: DEFAULT_MC,
+            faCount: DEFAULT_FA,
+            attempt: nextAttempt,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Generate failed");
+        setQuizData(data.quiz as QuizData);
+        setAttempt(nextAttempt);
+        setMcChosen({});
+        setFaAnswers({});
+        setMcResults([]);
+        setFaResults([]);
+        setFaAnswerRows([]);
+        setSubmitResult(null);
+        go(2);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Generate failed");
+        go(1);
+      } finally {
+        setBusy(false);
+        autoGenLock.current = false;
+      }
+    },
+    [go],
+  );
+
+  const setFilesAndQuiz = async (
+    next: { name: string; size: number; content: string }[],
+  ) => {
+    setFiles(next);
+    if (next.length === 0) return;
+    await generateQuiz(
+      next.map((f) => ({ name: f.name, content: f.content })),
+      0,
+    );
+  };
+
   const loadSample = () => {
     const content = SAMPLE_PROGRAM.content;
-    setFiles([
+    void setFilesAndQuiz([
       {
         name: SAMPLE_PROGRAM.name,
         size: new TextEncoder().encode(content).length,
@@ -189,58 +221,7 @@ export function CodeQuizGrader() {
       const content = await f.text();
       next.push({ name: f.name, size: f.size, content });
     }
-    setFiles(next);
-  };
-
-  const pickTotal = (n: number) => {
-    setTotalQ(n);
-    setCustomTotal("");
-  };
-
-  const onCustomTotal = (v: string) => {
-    setCustomTotal(v);
-    const n = parseInt(v, 10);
-    if (n >= 2 && n <= 30) setTotalQ(n);
-    else setTotalQ(0);
-  };
-
-  const onThreshold = (v: string) => {
-    const n = parseInt(v, 10);
-    if (n >= 50 && n <= 100) {
-      setThreshold(n);
-      localStorage.setItem(THRESHOLD_KEY, String(n));
-    }
-  };
-
-  const generateQuiz = async (nextAttempt = attempt) => {
-    if (mcCount === null || faCount === null) return;
-    setBusy(true);
-    setBusyLabel(`Building ${totalQ} questions from your code…`);
-    setError(null);
-    try {
-      const res = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          files: sourceFiles,
-          mcCount,
-          faCount,
-          attempt: nextAttempt,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Generate failed");
-      setQuizData(data.quiz as QuizData);
-      setAttempt(nextAttempt);
-      setMcChosen({});
-      setFaAnswers({});
-      setSubmitResult(null);
-      go(4);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Generate failed");
-    } finally {
-      setBusy(false);
-    }
+    await setFilesAndQuiz(next);
   };
 
   const submitAnswers = async () => {
@@ -256,7 +237,7 @@ export function CodeQuizGrader() {
     }
 
     setBusy(true);
-    setBusyLabel("Scoring your answers on this device…");
+    setBusyLabel("Checking your answers…");
     setError(null);
     try {
       const mcScored: McScored[] = mcList.map((q, i) => {
@@ -295,7 +276,7 @@ export function CodeQuizGrader() {
       setMcResults(mcScored);
       setFaResults(faScored);
       setFaAnswerRows(faPayload);
-      go(5);
+      go(3);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Grade failed");
     } finally {
@@ -309,18 +290,28 @@ export function CodeQuizGrader() {
   const faMax = faResults.length * 10;
   const grand = mcTotal + faTotal;
   const grandMax = mcMax + faMax;
-  const understandingPct =
-    grandMax > 0 ? Math.round((grand / grandMax) * 100) : 0;
-  const passed = understandingPct >= threshold;
+  const allMcCorrect = mcMax === 0 || mcTotal === mcMax;
+  const allFaPerfect = faMax === 0 || faResults.every((s) => s.score >= 10);
+  const perfect = grandMax > 0 && allMcCorrect && allFaPerfect;
+
+  const retryFreshQuiz = () => {
+    setMcChosen({});
+    setFaAnswers({});
+    setMcResults([]);
+    setFaResults([]);
+    setFaAnswerRows([]);
+    setSubmitResult(null);
+    setError(null);
+    void generateQuiz(sourceFiles, attempt + 1);
+  };
 
   const turnIn = async () => {
-    if (!passed) return;
+    if (!perfect) return;
     setBusy(true);
     setBusyLabel("Submitting to your course…");
     setError(null);
     try {
       if (!course) {
-        // Local completion without LTI session still records success for UX
         const completionId = `local_${Date.now().toString(36)}`;
         const submittedAt = new Date().toISOString();
         const local: SubmitResult = {
@@ -330,10 +321,7 @@ export function CodeQuizGrader() {
             "Marked complete on this device. Open from iCollege (or /pilot) to attach a course session for grade passback.",
           completionId,
           submittedAt,
-          gradePassback: {
-            scoreGiven: understandingPct,
-            scoreMaximum: 100,
-          },
+          gradePassback: { scoreGiven: 100, scoreMaximum: 100 },
         };
         const prev = JSON.parse(localStorage.getItem(COMPLETION_KEY) || "[]");
         prev.unshift({
@@ -344,7 +332,7 @@ export function CodeQuizGrader() {
         });
         localStorage.setItem(COMPLETION_KEY, JSON.stringify(prev.slice(0, 20)));
         setSubmitResult(local);
-        go(6);
+        go(4);
         return;
       }
 
@@ -353,8 +341,8 @@ export function CodeQuizGrader() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sessionId: course.sessionId,
-          understandingPct,
-          threshold,
+          understandingPct: 100,
+          threshold: 100,
           pointsEarned: grand,
           pointsPossible: grandMax || 100,
           fileNames: files.map((f) => f.name),
@@ -373,7 +361,7 @@ export function CodeQuizGrader() {
       });
       localStorage.setItem(COMPLETION_KEY, JSON.stringify(prev.slice(0, 20)));
       setSubmitResult(result);
-      go(6);
+      go(4);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Submit failed");
     } finally {
@@ -383,9 +371,6 @@ export function CodeQuizGrader() {
 
   const resetAll = () => {
     setFiles([]);
-    setTotalQ(0);
-    setCustomTotal("");
-    setMcCount(null);
     setQuizData({ mc: [], fa: [] });
     setMcChosen({});
     setFaAnswers({});
@@ -398,17 +383,6 @@ export function CodeQuizGrader() {
     setBusy(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
     go(1);
-  };
-
-  const retryQuiz = () => {
-    setMcChosen({});
-    setFaAnswers({});
-    setMcResults([]);
-    setFaResults([]);
-    setFaAnswerRows([]);
-    setSubmitResult(null);
-    setError(null);
-    go(3);
   };
 
   return (
@@ -440,8 +414,8 @@ export function CodeQuizGrader() {
           </div>
         ) : (
           <div className="mb-5 rounded-2xl border border-[var(--line)] bg-[var(--sky-soft)]/70 px-4 py-3 text-sm text-[var(--ink-2)]">
-            This is a <strong>course tool</strong>, not a public website. For the
-            real pilot, students open it from iCollege. To try tonight:{" "}
+            This is a <strong>course tool</strong>, not a public website. Open it
+            from iCollege — or try the{" "}
             <a className="font-semibold text-[var(--sky)] underline" href="/pilot">
               /pilot
             </a>{" "}
@@ -456,32 +430,11 @@ export function CodeQuizGrader() {
           Code understanding check
         </h1>
         <p className="max-w-xl text-[1.02rem] leading-relaxed text-[var(--ink-2)]">
-          Upload the program you wrote for this assignment, answer questions
-          about <em>your</em> code, clear the understanding threshold, then turn
-          it in to your course. Unlimited retries — no penalty.
+          Upload the program you wrote. We’ll build a short quiz from{" "}
+          <em>your</em> code. Get every question right to turn it in — miss any
+          and you can try a fresh quiz, no penalty.
         </p>
       </header>
-
-      <div className="cqg-card mb-6">
-        <div className="cqg-card-title">Understanding threshold</div>
-        <p className="cqg-card-sub">
-          Aim for about 80–85%. Questions are built from symbols in your upload
-          on this device — nothing is sent to a cloud LLM.
-        </p>
-        <label className="mb-2 block text-[13px] font-semibold text-[var(--ink-2)]">
-          Pass at {threshold}%
-        </label>
-        <input
-          type="range"
-          min={50}
-          max={100}
-          step={1}
-          value={threshold}
-          onChange={(e) => onThreshold(e.target.value)}
-          className="h-2 w-full max-w-xs accent-[var(--green)]"
-          aria-label="Understanding threshold percent"
-        />
-      </div>
 
       <ProgressTrack step={step} />
 
@@ -490,16 +443,16 @@ export function CodeQuizGrader() {
           <div className="cqg-card">
             <div className="cqg-card-title">Upload your assignment code</div>
             <p className="cqg-card-sub">
-              Drop the files for this lab — or load the sample to walk the full
-              course flow.
+              Drop your files (or load the sample). Your quiz appears
+              automatically from the symbols in the upload.
             </p>
             <div
               role="button"
               tabIndex={0}
               aria-label="Click to upload files"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => !busy && fileInputRef.current?.click()}
               onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ")
+                if (!busy && (e.key === "Enter" || e.key === " "))
                   fileInputRef.current?.click();
               }}
               onDragOver={(e) => {
@@ -510,13 +463,14 @@ export function CodeQuizGrader() {
               onDrop={(e) => {
                 e.preventDefault();
                 setDragOver(false);
-                void readFiles(e.dataTransfer.files);
+                if (!busy) void readFiles(e.dataTransfer.files);
               }}
               className={cn(
                 "cursor-pointer rounded-2xl border-2 border-dashed border-[var(--line-2)] px-6 py-10 text-center transition-all",
                 dragOver &&
                   "border-[var(--green)] bg-[var(--green-soft)] scale-[1.01]",
                 "hover:border-[var(--green)] hover:bg-[var(--green-soft)]/50",
+                busy && "pointer-events-none opacity-70",
               )}
             >
               <p className="mb-1 text-base font-semibold text-[var(--ink)]">
@@ -536,184 +490,54 @@ export function CodeQuizGrader() {
                 if (e.target.files) void readFiles(e.target.files);
               }}
             />
-            <div className="mt-3">
-              <Button type="button" variant="outline" onClick={loadSample}>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy}
+                onClick={loadSample}
+              >
                 Load sample program ({SAMPLE_PROGRAM.name})
               </Button>
+              {busy && (
+                <span className="flex items-center gap-2 text-[13px] text-[var(--ink-3)]">
+                  <span className="cqg-spin" />
+                  {busyLabel}
+                </span>
+              )}
             </div>
             {files.length > 0 && (
               <div className="mt-4 flex flex-col gap-1.5">
-                {files.map((f, i) => (
+                {files.map((f) => (
                   <div
                     key={f.name}
                     className="flex items-center gap-2 rounded-lg border border-[var(--line)] bg-[var(--paper)]/80 px-3 py-2 font-mono text-[13px]"
                   >
                     <span className="truncate font-medium">{f.name}</span>
-                    <span className="ml-auto mr-1.5 font-sans text-[11px] text-[var(--ink-3)]">
+                    <span className="ml-auto font-sans text-[11px] text-[var(--ink-3)]">
                       {fmtBytes(f.size)}
                     </span>
-                    <button
-                      type="button"
-                      className="text-[15px] leading-none text-[var(--ink-3)] hover:text-red-600"
-                      aria-label={`Remove ${f.name}`}
-                      onClick={() => setFiles(files.filter((_, j) => j !== i))}
-                    >
-                      ✕
-                    </button>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-          <Button
-            type="button"
-            disabled={files.length === 0}
-            className="mt-1 h-10 px-4"
-            onClick={() => go(2)}
-          >
-            Continue
-          </Button>
-        </section>
-      )}
-
-      {step === 2 && (
-        <section>
-          <div className="cqg-card">
-            <div className="cqg-card-title">How many questions?</div>
-            <p className="cqg-card-sub">
-              Short is fine. You can retry with a fresh set anytime.
-            </p>
-            <div className="mb-3 flex flex-wrap gap-2">
-              {[5, 8, 10, 15].map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  onClick={() => pickTotal(n)}
-                  className={cn(
-                    "h-14 w-14 rounded-xl border text-lg font-semibold transition-colors",
-                    totalQ === n && !customTotal
-                      ? "border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]"
-                      : "border-[var(--line-2)] bg-[var(--surface)] text-[var(--ink-2)] hover:border-[var(--green)] hover:bg-[var(--green-soft)]",
-                  )}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-2">
-              <Input
-                type="number"
-                min={2}
-                max={30}
-                placeholder="Custom…"
-                value={customTotal}
-                onChange={(e) => onCustomTotal(e.target.value)}
-                className="h-9 w-24 bg-[var(--surface)]"
-              />
-              <span className="text-[13px] text-[var(--ink-3)]">2 – 30</span>
-            </div>
-          </div>
-          <div className="mt-1 flex flex-wrap gap-3">
-            <Button
-              type="button"
-              disabled={totalQ < 2}
-              className="h-10 px-4"
-              onClick={() => {
-                setMcCount(null);
-                go(3);
-              }}
-            >
-              Continue
-            </Button>
-            <Button type="button" variant="outline" onClick={() => go(1)}>
-              Back
-            </Button>
-          </div>
-        </section>
-      )}
-
-      {step === 3 && (
-        <section>
-          <div className="cqg-card">
-            <div className="cqg-card-title">Choose your mix</div>
-            <p className="cqg-card-sub">
-              <strong>{totalQ}</strong> questions total — how many multiple-choice?
-            </p>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-2 block text-[13px] font-semibold text-[var(--ink-2)]">
-                  Multiple-choice
-                </label>
-                <div className="flex flex-wrap gap-1.5">
-                  {Array.from({ length: totalQ + 1 }, (_, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => setMcCount(i)}
-                      className={cn(
-                        "rounded-full border px-3.5 py-1 text-[13px] font-semibold",
-                        mcCount === i
-                          ? "border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]"
-                          : "border-[var(--line-2)] bg-[var(--surface)] text-[var(--ink-2)]",
-                      )}
-                    >
-                      {i}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="mb-2 block text-[13px] font-semibold text-[var(--ink-2)]">
-                  Free-answer
-                </label>
-                <div
-                  className="text-[28px] font-semibold text-[var(--green)]"
-                  style={{ fontFamily: "var(--font-display), serif" }}
-                >
-                  {faCount === null ? "—" : faCount}
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="mt-1 flex flex-wrap items-center gap-3">
-            <Button
-              type="button"
-              className="h-10 px-4"
-              disabled={
-                mcCount === null ||
-                (mcCount === 0 && (faCount ?? 0) === 0) ||
-                busy
-              }
-              onClick={() => void generateQuiz(attempt)}
-            >
-              Generate quiz
-            </Button>
-            <Button type="button" variant="outline" disabled={busy} onClick={() => go(2)}>
-              Back
-            </Button>
-            {busy && (
-              <span className="flex items-center gap-2 text-[13px] text-[var(--ink-3)]">
-                <span className="cqg-spin" />
-                {busyLabel}
-              </span>
             )}
           </div>
           {error && <div className="cqg-err mt-2.5">{error}</div>}
         </section>
       )}
 
-      {step === 4 && (
+      {step === 2 && (
         <section>
           <div className="cqg-card">
             <div className="cqg-card-title">
               Show what you know
               <span className="ml-2 text-base font-normal text-[var(--ink-3)]">
-                · on-device
+                · built from your upload
                 {attempt > 0 ? ` · attempt ${attempt + 1}` : ""}
               </span>
             </div>
             <p className="cqg-card-sub">
-              Questions reference symbols from your upload.
+              Answer every question. You need a perfect score to turn this in.
             </p>
             {(quizData.mc?.length ?? 0) > 0 && (
               <>
@@ -772,10 +596,13 @@ export function CodeQuizGrader() {
                     </div>
                     <Textarea
                       rows={3}
-                      placeholder="Name functions and variables from your code…"
+                      placeholder="Explain in your own words — name functions and variables from your code…"
                       value={faAnswers[i] || ""}
                       onChange={(e) =>
-                        setFaAnswers((prev) => ({ ...prev, [i]: e.target.value }))
+                        setFaAnswers((prev) => ({
+                          ...prev,
+                          [i]: e.target.value,
+                        }))
                       }
                       className="min-h-[96px] bg-[var(--surface)] text-sm"
                     />
@@ -791,10 +618,15 @@ export function CodeQuizGrader() {
               disabled={busy}
               onClick={() => void submitAnswers()}
             >
-              Check understanding
+              Check answers
             </Button>
-            <Button type="button" variant="outline" disabled={busy} onClick={() => go(3)}>
-              Back
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={resetAll}
+            >
+              Different files
             </Button>
             {busy && (
               <span className="flex items-center gap-2 text-[13px] text-[var(--ink-3)]">
@@ -807,80 +639,78 @@ export function CodeQuizGrader() {
         </section>
       )}
 
-      {step === 5 && (
+      {step === 3 && (
         <section>
           <div className="cqg-card">
-            <div className="cqg-card-title">Your understanding score</div>
+            <div className="cqg-card-title">
+              {perfect ? "Perfect — ready to turn in" : "Not quite yet"}
+            </div>
             <p className="cqg-card-sub">
-              {passed
-                ? "You cleared the threshold — you can turn this in to your course."
-                : "Not there yet — try a new quiz anytime. No penalty."}
+              {perfect
+                ? "You got every question right. Turn this in to your course when you’re ready."
+                : "You need every answer correct to complete this assignment. Try a fresh quiz — no penalty."}
             </p>
             <div className="mb-5 rounded-2xl border border-[var(--line)] bg-[var(--paper)]/70 px-4 py-4">
-              <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
+              <div className="flex flex-wrap items-end justify-between gap-2">
                 <div>
                   <div className="text-[12px] font-bold uppercase tracking-wider text-[var(--ink-3)]">
-                    Understanding
+                    Score
                   </div>
                   <div
-                    className="text-[2.4rem] font-semibold leading-none"
+                    className="text-[2.2rem] font-semibold leading-none"
                     style={{ fontFamily: "var(--font-display), serif" }}
                   >
-                    {understandingPct}%
+                    {grand} / {grandMax}
                   </div>
                 </div>
-                <div className="text-right text-sm text-[var(--ink-2)]">
-                  Threshold {threshold}%
-                  <div
-                    className={cn(
-                      "mt-1 font-semibold",
-                      passed ? "text-[var(--green)]" : "text-[var(--amber)]",
-                    )}
-                  >
-                    {passed ? "Ready to turn in" : "Keep practicing"}
-                  </div>
-                </div>
-              </div>
-              <div className="cqg-meter-track">
                 <div
-                  className="cqg-meter-fill"
-                  style={{ width: `${Math.min(100, understandingPct)}%` }}
-                />
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                {mcMax > 0 && (
-                  <span className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-0.5 font-medium text-[var(--sky)]">
-                    MC {mcTotal}/{mcMax}
-                  </span>
-                )}
-                {faMax > 0 && (
-                  <span className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-0.5 font-medium text-[var(--green)]">
-                    FA {faTotal}/{faMax}
-                  </span>
-                )}
+                  className={cn(
+                    "font-semibold",
+                    perfect ? "text-[var(--green)]" : "text-[var(--amber)]",
+                  )}
+                >
+                  {perfect ? "100% · pass" : "Need 100% to turn in"}
+                </div>
               </div>
             </div>
 
             {mcResults.map((a) => (
-              <div key={a.id} className="border-b border-[var(--line)] py-3 text-sm">
+              <div
+                key={a.id}
+                className="border-b border-[var(--line)] py-3 text-sm"
+              >
                 <div className="font-medium">{a.question}</div>
-                <div className="mt-1 text-xs text-[var(--ink-3)]">
-                  {a.score === 1 ? "Correct" : `Not quite · answer ${a.correct}`}
+                <div
+                  className={cn(
+                    "mt-1 text-xs font-semibold",
+                    a.score === 1 ? "text-[var(--green)]" : "text-red-700",
+                  )}
+                >
+                  {a.score === 1
+                    ? "Correct"
+                    : `Not quite · correct is ${a.correct}`}
                 </div>
               </div>
             ))}
             {faResults.map((s, i) => (
-              <div key={s.id} className="border-b border-[var(--line)] py-3 text-sm">
+              <div
+                key={s.id}
+                className="border-b border-[var(--line)] py-3 text-sm"
+              >
                 <div className="flex justify-between gap-3">
-                  <div className="font-medium">{faAnswerRows[i]?.question}</div>
+                  <div className="font-medium">
+                    {faAnswerRows[i]?.question}
+                  </div>
                   <div className="font-semibold">{s.score}/10</div>
                 </div>
-                <div className="mt-1 text-[13px] text-[var(--ink-2)]">{s.feedback}</div>
+                <div className="mt-1 text-[13px] text-[var(--ink-2)]">
+                  {s.feedback}
+                </div>
               </div>
             ))}
           </div>
           <div className="mt-1 flex flex-wrap gap-3">
-            {passed ? (
+            {perfect ? (
               <Button
                 type="button"
                 className="h-10 px-4"
@@ -894,10 +724,7 @@ export function CodeQuizGrader() {
                 type="button"
                 className="h-10 px-4"
                 disabled={busy}
-                onClick={() => {
-                  retryQuiz();
-                  void generateQuiz(attempt + 1);
-                }}
+                onClick={retryFreshQuiz}
               >
                 Try a new quiz
               </Button>
@@ -916,7 +743,7 @@ export function CodeQuizGrader() {
         </section>
       )}
 
-      {step === 6 && submitResult && (
+      {step === 4 && submitResult && (
         <section>
           <div className="cqg-card">
             <div className="cqg-card-title">Submitted to course</div>
@@ -926,7 +753,7 @@ export function CodeQuizGrader() {
                 className="text-2xl font-semibold"
                 style={{ fontFamily: "var(--font-display), serif" }}
               >
-                {submitResult.gradePassback.scoreGiven}% understanding
+                100% understanding
               </div>
               <div className="mt-2 text-sm text-[var(--ink-2)]">
                 Completion ID{" "}
@@ -935,8 +762,7 @@ export function CodeQuizGrader() {
                 </code>
               </div>
               <div className="mt-1 text-sm text-[var(--ink-2)]">
-                {new Date(submitResult.submittedAt).toLocaleString()} · mode{" "}
-                {submitResult.mode}
+                {new Date(submitResult.submittedAt).toLocaleString()}
               </div>
               {course && (
                 <div className="mt-3 text-sm text-[var(--ink-2)]">
