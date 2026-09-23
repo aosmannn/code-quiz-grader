@@ -1,30 +1,20 @@
 import { NextResponse } from "next/server";
 import { getLtiConfig } from "@/lib/lti/config";
+import { exportToolPublicJwk } from "@/lib/lti/ags";
 
 export const runtime = "nodejs";
 
 /**
  * Tool JWKS endpoint for LTI 1.3.
  * When LTI_TOOL_PRIVATE_KEY_PEM is set, export the matching public JWK.
- * Until then, return an empty set with registration hints.
  */
 export async function GET() {
   const cfg = getLtiConfig();
-
-  // Without a configured key, advertise empty JWKS so D2L can still hit the URL.
-  // Operators generate a keypair and set LTI_TOOL_PRIVATE_KEY_PEM + LTI_TOOL_KEY_ID.
   const keys: unknown[] = [];
 
   if (cfg.toolPrivateKeyPem) {
-    // PEM → JWK conversion would go here (node:crypto createPublicKey / export jwk).
-    // Kept explicit so we don't ship a half-parsed key.
-    keys.push({
-      kty: "RSA",
-      kid: cfg.toolKeyId,
-      use: "sig",
-      alg: "RS256",
-      note: "Replace with exported public JWK from LTI_TOOL_PRIVATE_KEY_PEM",
-    });
+    const jwk = exportToolPublicJwk(cfg.toolPrivateKeyPem, cfg.toolKeyId);
+    if (jwk) keys.push(jwk);
   }
 
   return NextResponse.json(
@@ -32,8 +22,11 @@ export async function GET() {
       keys,
       meta: {
         keyId: cfg.toolKeyId,
-        configured: Boolean(cfg.toolPrivateKeyPem),
-        hint: "Generate an RSA keypair; set LTI_TOOL_PRIVATE_KEY_PEM and publish the public JWK here for D2L.",
+        configured: keys.length > 0,
+        hint:
+          keys.length > 0
+            ? "Public JWK published for D2L."
+            : "Generate an RSA keypair; set LTI_TOOL_PRIVATE_KEY_PEM to publish the public JWK.",
       },
     },
     {

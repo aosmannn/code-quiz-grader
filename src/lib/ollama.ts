@@ -4,13 +4,13 @@ import { summarizeCode } from "./mock-quiz";
 export const OLLAMA_BASE =
   process.env.OLLAMA_BASE_URL?.replace(/\/$/, "") || "http://127.0.0.1:11434";
 
-/** Preferred models — first installed match wins. */
+/** Preferred models — first installed match wins. Prefer 3b for quiz quality. */
 export const PREFERRED_MODELS = [
-  "llama3.2:1b",
   "llama3.2:3b",
+  "llama3.2:1b",
   "llama3.2",
-  "qwen2.5:1.5b",
   "qwen2.5:3b",
+  "qwen2.5:1.5b",
   "qwen2.5",
   "phi3:mini",
   "phi3",
@@ -66,7 +66,7 @@ export function pickDefaultModel(models: string[]): string | null {
 export async function getOllamaStatus(
   preferred?: string | null,
 ): Promise<OllamaStatus> {
-  const pullHint = "ollama pull llama3.2:1b";
+  const pullHint = "ollama pull llama3.2:3b";
   try {
     const models = await listOllamaModels();
     const selected =

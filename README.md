@@ -2,7 +2,7 @@
 
 **Preflight** is the pre-submit check students run from **iCollege (D2L)** on the assignment — not a public website.
 
-**Student flow:** assignment link → upload their code → short quiz from *their* code → **100%** → mark complete → **cleared to submit** the real lab. Miss any question → fresh quiz, no penalty. **No cloud LLM / API keys.** Students don’t install Ollama — the course host runs it for the pilot.
+**Student flow:** assignment link → upload *or paste* code → see in-app preview + “what we’ll ask about” → quiz → **100%** → copy clearance code → **cleared to submit**. Miss any question → fresh quiz, no penalty. Host prefers **`llama3.2:3b`** (falls back to `1b`). Real iCollege AGS passback when `LTI_TOKEN_URL` + key + line item are set.
 
 ## Try tonight (localhost)
 
@@ -10,6 +10,8 @@
 npm install
 npm run build
 npm run start
+# optional better quizzes:
+ollama pull llama3.2:3b
 ```
 
 | Who | Link |

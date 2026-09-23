@@ -15,6 +15,8 @@ export function getLtiConfig() {
     deploymentId: process.env.LTI_DEPLOYMENT_ID || "",
     /** Platform JWKS URL (D2L) — used to verify id_token when wired */
     platformJwksUrl: process.env.LTI_PLATFORM_JWKS_URL || "",
+    /** Platform OAuth2 token URL for AGS client_credentials */
+    tokenUrl: process.env.LTI_TOKEN_URL || "",
     /** Our private key PEM for signing client assertions (AGS) — optional until wired */
     toolPrivateKeyPem: process.env.LTI_TOOL_PRIVATE_KEY_PEM || "",
     toolKeyId: process.env.LTI_TOOL_KEY_ID || "cqg-lti-key-1",
