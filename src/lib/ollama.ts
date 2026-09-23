@@ -227,18 +227,21 @@ export function buildGeneratePrompt(
   const fileNames = files.map((f) => f.name).join(", ");
   const symbols = [
     s.primarySymbol,
+    s.extendsName || "",
     ...s.classNames,
     ...s.defNames,
     ...s.methodHints,
   ]
     .filter(Boolean)
-    .slice(0, 8);
+    .slice(0, 10);
   const symbolList =
     symbols.length > 0 ? symbols.map((x) => `\`${x}\``).join(", ") : fileNames;
 
-  // Example derived from THIS upload only — never GradeBook unless it's their file
-  const exSym = symbols[0] || s.primaryName;
-  const exFile = s.primaryName;
+  const javaHint =
+    s.extendsName || s.hasOverride || s.hasSuper
+      ? `- This looks like a Java inheritance lab. Ask about \`extends\`, \`super(...)\`, \`@Override\`, and what overridden methods return — NOT "printed output" unless the file clearly prints.\n` +
+        `- Bad questions to AVOID: "why is X used the way it is?", "walk through the printed output", "how does control flow work?", "how does it handle repeated work?"\n`
+      : `- Avoid lazy templates: "why is X used the way it is?", "walk through printed output" (unless printf/print exists), generic control-flow/loop filler.\n`;
 
   return (
     `You write a quiz ONLY about the student's uploaded source below.\n` +
@@ -250,13 +253,14 @@ export function buildGeneratePrompt(
     `Each fa object: id, question.\n` +
     `CRITICAL:\n` +
     `- Ask ONLY about symbols/files from THIS upload (${fileNames}).\n` +
-    `- Focus on what the program is teaching/doing (types, casts, formats, control flow, edge values) — not generic "what is printf" trivia repeated 4 times.\n` +
+    `- Each MC must test a SPECIFIC fact from the source (a call, return value, inheritance relationship, cast, format).\n` +
+    javaHint +
     `- Each question must be DISTINCT (no near-duplicates).\n` +
-    `- Do NOT mention GradeBook, add_score, letter_grade, or any other program not in the upload.\n` +
-    `- Do NOT use joke distractors (no blockchain, GPU shaders, firmware blobs, sunscreen).\n` +
+    `- Do NOT mention GradeBook or any program not in the upload.\n` +
+    `- Do NOT use joke distractors (blockchain, GPU, firmware, sunscreen).\n` +
     `- Wrong options must be plausible mistakes about THIS code.\n` +
-    `Shape reminder (replace with content about ${exSym} / ${exFile}):\n` +
-    `{"mc":[{"id":1,"question":"In ${exFile}, why is ${exSym} used the way it is?","options":{"A":"...","B":"...","C":"...","D":"..."},"answer":"A"}],"fa":[{"id":2,"question":"Walk through ${exFile} and explain the printed output."}]}\n` +
+    `Example shape for a Java subclass (adapt to THIS file):\n` +
+    `{"mc":[{"id":1,"question":"Why does UndergraduateStudent extend Student?","options":{"A":"To inherit Student state/behavior and specialize it","B":"...","C":"...","D":"..."},"answer":"A"}],"fa":[{"id":2,"question":"Explain what getStudentClass returns and why @Override matters."}]}\n` +
     `Output ONLY the JSON object.`
   );
 }
@@ -382,6 +386,27 @@ export function coerceQuiz(
       )
     ) {
       return false;
+    }
+    // Lazy / template junk small models love to emit
+    if (
+      /used the way it is|walk through .+ printed output|explain the printed output|how does control flow work|handle repeated work|line by line\. what is stored/.test(
+        lower,
+      )
+    ) {
+      // Allow "printed output" only if the upload actually prints
+      if (/print/.test(lower) && !/\b(printf|print|println|cout)\b/.test(blob)) {
+        return false;
+      }
+      if (
+        /used the way it is|how does control flow work|handle repeated work|line by line\. what is stored/.test(
+          lower,
+        )
+      ) {
+        return false;
+      }
+      if (/printed output/.test(lower) && !/\b(printf|print|println|cout)\b/.test(blob)) {
+        return false;
+      }
     }
     for (const leak of ["gradebook", "add_score", "letter_grade", "class_average"]) {
       if (lower.includes(leak) && !blob.includes(leak)) return false;

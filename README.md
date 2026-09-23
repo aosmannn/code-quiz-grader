@@ -26,8 +26,8 @@ LTI launch redirects to `/`. `/try` auto-launches a demo session on the home pag
 
 1. Open the assignment in iCollege  
 2. Click the **Preflight / understanding check** link  
-3. Upload the code for that lab  
-4. Pass the quiz at 100% and mark complete  
+3. Upload or paste the code for that lab (preview shows what we’ll ask about)  
+4. Pass the quiz at 100%, copy your clearance code if needed  
 5. Return to iCollege and submit the real assignment  
 
 ## Pass rule

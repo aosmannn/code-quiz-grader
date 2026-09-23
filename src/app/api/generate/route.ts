@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { generateLocalQuiz } from "@/lib/mock-quiz";
+import { generateLocalQuiz, normalizeSourceFiles } from "@/lib/mock-quiz";
 import {
   buildGeneratePrompt,
   callOllama,
@@ -24,9 +24,12 @@ type Body = {
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Body;
-    const { files, mcCount, faCount } = body;
+    const { mcCount, faCount } = body;
+    const files = normalizeSourceFiles(
+      Array.isArray(body.files) ? body.files : [],
+    );
 
-    if (!Array.isArray(files) || files.length === 0) {
+    if (files.length === 0) {
       return NextResponse.json(
         { error: "Upload at least one file." },
         { status: 400 },
@@ -81,9 +84,14 @@ export async function POST(req: Request) {
             filler,
             files,
           );
-          if (fromModel === 0) {
-            lastErr = new Error("Model returned no usable questions");
-            continue;
+          if (fromModel === 0 || (partial && fromModel < Math.ceil((mcCount + faCount) / 2))) {
+            return NextResponse.json({
+              quiz: filler,
+              mode: "local" as const,
+              model: status.selected,
+              notice:
+                "Built a code-grounded quiz on-device (local model reply wasn’t solid enough).",
+            });
           }
           return NextResponse.json({
             quiz,
@@ -92,7 +100,7 @@ export async function POST(req: Request) {
             ...(partial
               ? {
                   notice:
-                    "Local model returned a partial quiz; topped up missing items.",
+                    "Local model returned a partial quiz; topped up with code-grounded items.",
                 }
               : {}),
           });
@@ -105,8 +113,8 @@ export async function POST(req: Request) {
       return NextResponse.json({
         quiz: filler,
         mode: "local" as const,
-        model: null,
-        notice: `Local model hiccup (${message}). Used on-device fallback questions.`,
+        model: status.selected,
+        notice: `On-device quiz (local model hiccup: ${message}).`,
       });
     }
 
