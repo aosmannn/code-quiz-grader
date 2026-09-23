@@ -79,6 +79,7 @@ export async function POST(req: Request) {
             mcCount,
             faCount,
             filler,
+            files,
           );
           if (fromModel === 0) {
             lastErr = new Error("Model returned no usable questions");

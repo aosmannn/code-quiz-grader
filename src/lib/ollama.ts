@@ -1,4 +1,5 @@
 import type { FaAnswer, FaScored, QuizData, SourceFile } from "./types";
+import { summarizeCode } from "./mock-quiz";
 
 export const OLLAMA_BASE =
   process.env.OLLAMA_BASE_URL?.replace(/\/$/, "") || "http://127.0.0.1:11434";
@@ -142,25 +143,121 @@ function truncateFiles(files: SourceFile[], perFile = 4500): string {
     .join("\n\n");
 }
 
+const STOP = new Set(
+  [
+    "the",
+    "and",
+    "for",
+    "int",
+    "void",
+    "main",
+    "return",
+    "this",
+    "that",
+    "with",
+    "from",
+    "what",
+    "when",
+    "how",
+    "does",
+    "do",
+    "is",
+    "are",
+    "class",
+    "function",
+    "method",
+    "code",
+    "file",
+    "program",
+    "true",
+    "false",
+    "null",
+    "include",
+    "stdio",
+  ].map((s) => s.toLowerCase()),
+);
+
+/** Tokens that questions must honestly reference from THIS upload. */
+export function uploadGroundTokens(files: SourceFile[]): Set<string> {
+  const s = summarizeCode(files);
+  const tokens = new Set<string>();
+  for (const name of s.fileList) {
+    tokens.add(name.toLowerCase());
+    tokens.add(name.replace(/\.[^.]+$/, "").toLowerCase());
+  }
+  for (const x of [
+    s.primarySymbol,
+    ...s.classNames,
+    ...s.defNames,
+    ...s.methodHints,
+    ...s.raiseHints,
+  ]) {
+    if (x && x.length > 1) tokens.add(x.toLowerCase());
+  }
+  // Pull more identifiers from source
+  const blob = files.map((f) => f.content).join("\n");
+  for (const m of blob.matchAll(/\b([A-Za-z_][A-Za-z0-9_]{2,})\b/g)) {
+    const t = m[1].toLowerCase();
+    if (!STOP.has(t)) tokens.add(t);
+  }
+  return tokens;
+}
+
+export function textGroundedInUpload(
+  text: string,
+  ground: Set<string>,
+): boolean {
+  const lower = text.toLowerCase();
+  // Must hit at least one upload token
+  let hit = false;
+  for (const t of ground) {
+    if (t.length < 2) continue;
+    if (lower.includes(t)) {
+      hit = true;
+      break;
+    }
+  }
+  return hit;
+}
+
 export function buildGeneratePrompt(
   files: SourceFile[],
   mcCount: number,
   faCount: number,
 ): string {
   const code = truncateFiles(files);
+  const s = summarizeCode(files);
   const fileNames = files.map((f) => f.name).join(", ");
+  const symbols = [
+    s.primarySymbol,
+    ...s.classNames,
+    ...s.defNames,
+    ...s.methodHints,
+  ]
+    .filter(Boolean)
+    .slice(0, 8);
+  const symbolList =
+    symbols.length > 0 ? symbols.map((x) => `\`${x}\``).join(", ") : fileNames;
+
+  // Example derived from THIS upload only — never GradeBook unless it's their file
+  const exSym = symbols[0] || s.primaryName;
+  const exFile = s.primaryName;
 
   return (
-    `You write quizzes about a student's uploaded source code.\n` +
-    `Files: ${fileNames}\n\n${code}\n\n` +
-    `Task: return JSON with EXACTLY ${mcCount} items in "mc" and EXACTLY ${faCount} items in "fa".\n` +
-    `Each mc item MUST have: id, question, options with keys A B C D (four full sentences), and answer (one of A/B/C/D).\n` +
-    `Each fa item MUST have: id and question.\n` +
-    `Example shape:\n` +
-    `{"mc":[{"id":1,"question":"What does GradeBook.add_score do when score is 150?","options":{"A":"It appends 150 to the student list","B":"It raises ValueError because score must be 0–100","C":"It silently ignores the call","D":"It converts 150 to a letter grade"},"answer":"B"}],"fa":[{"id":2,"question":"Explain how average uses the stored scores."}]}\n` +
-    `Questions must mention real identifiers from the code.\n` +
-    `Wrong options must be plausible mistakes about THIS code — never jokes.\n` +
-    `The answer letter must be the correct option.\n` +
+    `You write a quiz ONLY about the student's uploaded source below.\n` +
+    `Uploaded files: ${fileNames}\n` +
+    `Important symbols in THIS upload: ${symbolList}\n\n` +
+    `${code}\n\n` +
+    `Return JSON with EXACTLY ${mcCount} objects in "mc" and EXACTLY ${faCount} objects in "fa".\n` +
+    `Each mc object: id, question, options {A,B,C,D} (four full sentences), answer (A|B|C|D).\n` +
+    `Each fa object: id, question.\n` +
+    `CRITICAL:\n` +
+    `- Ask ONLY about symbols/files from THIS upload (${fileNames}).\n` +
+    `- Do NOT mention GradeBook, add_score, letter_grade, or any other program not in the upload.\n` +
+    `- Do NOT copy sample questions from elsewhere — invent questions from the code above.\n` +
+    `- Wrong options must be plausible mistakes about THIS code (no jokes/blockchain/GPU).\n` +
+    `Shape reminder (replace with content about ${exSym} / ${exFile}):\n` +
+    `{"mc":[{"id":1,"question":"What is the role of ${exSym} in ${exFile}?","options":{"A":"...","B":"...","C":"...","D":"..."},"answer":"A"}],"fa":[{"id":2,"question":"Explain how ${exSym} works in ${exFile}."}]}\n` +
     `Output ONLY the JSON object.`
   );
 }
@@ -266,6 +363,7 @@ export function coerceQuiz(
   mcCount: number,
   faCount: number,
   filler: QuizData,
+  files: SourceFile[],
 ): { quiz: QuizData; partial: boolean; fromModel: number } {
   const root = (raw || {}) as Record<string, unknown>;
   const mcIn = (root.mc || root.multiple_choice || []) as unknown[];
@@ -273,6 +371,23 @@ export function coerceQuiz(
     root.free_answer ||
     root.free_answers ||
     []) as unknown[];
+
+  const ground = uploadGroundTokens(files);
+  const blob = files.map((f) => f.content).join("\n").toLowerCase();
+
+  const keepText = (text: string) => {
+    const lower = text.toLowerCase();
+    // Reject classic prompt-leak names when they aren't in the upload
+    for (const leak of [
+      "gradebook",
+      "add_score",
+      "letter_grade",
+      "class_average",
+    ]) {
+      if (lower.includes(leak) && !blob.includes(leak)) return false;
+    }
+    return textGroundedInUpload(text, ground);
+  };
 
   let fromModelMc: QuizData["mc"] = [];
   let fromModelFa: QuizData["fa"] = [];
@@ -282,7 +397,11 @@ export function coerceQuiz(
         { mc: mcIn as QuizData["mc"], fa: [] },
         Math.min(mcCount, mcIn.length),
         0,
-      ).mc;
+      ).mc.filter((q) =>
+        keepText(
+          `${q.question} ${q.options.A} ${q.options.B} ${q.options.C} ${q.options.D}`,
+        ),
+      );
     }
   } catch {
     fromModelMc = [];
@@ -293,7 +412,7 @@ export function coerceQuiz(
         { mc: [], fa: faIn as QuizData["fa"] },
         0,
         Math.min(faCount, faIn.length),
-      ).fa;
+      ).fa.filter((q) => keepText(q.question));
     }
   } catch {
     fromModelFa = [];
