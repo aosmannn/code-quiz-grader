@@ -22,6 +22,8 @@ export type LtiLaunchContext = {
   lineItemUrl?: string;
   /** Platform return URL (optional) */
   returnUrl?: string;
+  /** Instructor lab preset id when launched with ?lab= */
+  labId?: string;
   launchedAt: string;
 };
 

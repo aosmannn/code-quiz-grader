@@ -221,6 +221,7 @@ export function buildGeneratePrompt(
   files: SourceFile[],
   mcCount: number,
   faCount: number,
+  lab?: { goals?: string[]; focus?: string[]; title?: string } | null,
 ): string {
   const code = truncateFiles(files);
   const s = summarizeCode(files);
@@ -231,9 +232,10 @@ export function buildGeneratePrompt(
     ...s.classNames,
     ...s.defNames,
     ...s.methodHints,
+    ...(lab?.focus || []),
   ]
     .filter(Boolean)
-    .slice(0, 10);
+    .slice(0, 12);
   const symbolList =
     symbols.length > 0 ? symbols.map((x) => `\`${x}\``).join(", ") : fileNames;
 
@@ -242,6 +244,13 @@ export function buildGeneratePrompt(
       ? `- This looks like a Java inheritance lab. Ask about \`extends\`, \`super(...)\`, \`@Override\`, and what overridden methods return — NOT "printed output" unless the file clearly prints.\n` +
         `- Bad questions to AVOID: "why is X used the way it is?", "walk through the printed output", "how does control flow work?", "how does it handle repeated work?"\n`
       : `- Avoid lazy templates: "why is X used the way it is?", "walk through printed output" (unless printf/print exists), generic control-flow/loop filler.\n`;
+
+  const labHint =
+    lab?.goals && lab.goals.length
+      ? `- Instructor lab${lab.title ? ` (${lab.title})` : ""} goals — cover these ideas using THIS upload's symbols:\n` +
+        lab.goals.map((g) => `  · ${g}`).join("\n") +
+        "\n"
+      : "";
 
   return (
     `You write a quiz ONLY about the student's uploaded source below.\n` +
@@ -255,12 +264,11 @@ export function buildGeneratePrompt(
     `- Ask ONLY about symbols/files from THIS upload (${fileNames}).\n` +
     `- Each MC must test a SPECIFIC fact from the source (a call, return value, inheritance relationship, cast, format).\n` +
     javaHint +
+    labHint +
     `- Each question must be DISTINCT (no near-duplicates).\n` +
     `- Do NOT mention GradeBook or any program not in the upload.\n` +
     `- Do NOT use joke distractors (blockchain, GPU, firmware, sunscreen).\n` +
     `- Wrong options must be plausible mistakes about THIS code.\n` +
-    `Example shape for a Java subclass (adapt to THIS file):\n` +
-    `{"mc":[{"id":1,"question":"Why does UndergraduateStudent extend Student?","options":{"A":"To inherit Student state/behavior and specialize it","B":"...","C":"...","D":"..."},"answer":"A"}],"fa":[{"id":2,"question":"Explain what getStudentClass returns and why @Override matters."}]}\n` +
     `Output ONLY the JSON object.`
   );
 }

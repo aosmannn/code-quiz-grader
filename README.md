@@ -16,9 +16,12 @@ ollama pull llama3.2:3b
 
 | Who | Link |
 | --- | --- |
-| **Preflight (home)** | [http://127.0.0.1:43127/](http://127.0.0.1:43127/) |
+| **Student (home)** | [http://127.0.0.1:43127/](http://127.0.0.1:43127/) |
 | **Student one-click** | [http://127.0.0.1:43127/try](http://127.0.0.1:43127/try) |
-| Instructor simulator | [http://127.0.0.1:43127/pilot](http://127.0.0.1:43127/pilot) |
+| **Lab preset (example)** | [http://127.0.0.1:43127/try?lab=inheritance](http://127.0.0.1:43127/try?lab=inheritance) |
+| **Instructor presets** | [http://127.0.0.1:43127/instructor](http://127.0.0.1:43127/instructor) |
+| **TA verify** | [http://127.0.0.1:43127/ta](http://127.0.0.1:43127/ta) |
+| Launch simulator | [http://127.0.0.1:43127/pilot](http://127.0.0.1:43127/pilot) |
 
 LTI launch redirects to `/`. `/try` auto-launches a demo session on the home page.
 

@@ -532,14 +532,18 @@ export function generateLocalQuiz(
   mcCount: number,
   faCount: number,
   attempt = 0,
+  lab?: { goals?: string[]; focus?: string[]; title?: string } | null,
 ): QuizData {
   const s = summarizeCode(files);
   const rand = mulberry32(hashSeed(s.fingerprint) ^ (attempt * 0x9e3779b9));
 
   // Prefer OOP-specific builders when this is an inheritance lab
   const oop = javaOopBuilders(s);
+  const preferOop =
+    oop.length >= 2 ||
+    Boolean(lab?.focus?.some((f) => /extends|super|override/i.test(f)));
   const mcPool = shuffle(
-    oop.length >= 2 ? [...oop, ...MC_BUILDERS] : MC_BUILDERS,
+    preferOop ? [...oop, ...MC_BUILDERS] : MC_BUILDERS,
     rand,
   );
   const faPool = shuffle(FA_BUILDERS, rand);

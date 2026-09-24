@@ -112,8 +112,8 @@ export function parseLaunchClaims(
     resourceLinkId: input.resource_link_id || input.resourceLinkId,
     assignmentTitle: String(assignmentTitle),
     lineItemUrl: input.lineitem || input.lineItemUrl,
-    returnUrl: input["https://purl.imsglobal.org/spec/lti/claim/launch_presentation"]
-      ? undefined
-      : input.launch_presentation_return_url || input.returnUrl,
+    returnUrl:
+      input.launch_presentation_return_url || input.returnUrl || undefined,
+    labId: input.lab_id || input.labId || undefined,
   };
 }

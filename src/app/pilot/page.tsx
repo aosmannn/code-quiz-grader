@@ -12,8 +12,9 @@ export default function PilotPage() {
   const [userName, setUserName] = useState("Alex Student");
   const [courseTitle, setCourseTitle] = useState("CSc 1301 — Principles of CS I");
   const [assignmentTitle, setAssignmentTitle] = useState(
-    "Lab 3 understanding check",
+    "Lab 3 · Inheritance",
   );
+  const [labId, setLabId] = useState("inheritance");
   const [busy, setBusy] = useState(false);
 
   const launch = async () => {
@@ -31,9 +32,10 @@ export default function PilotPage() {
         roles: "Learner",
         context_id: "csc1301-fall",
         context_title: courseTitle,
-        resource_link_id: "lab3-understanding",
+        resource_link_id: labId ? `lab-${labId}` : "lab3-understanding",
         resource_link_title: assignmentTitle,
         launch_presentation_return_url: "http://127.0.0.1:43127/",
+        lab_id: labId,
       };
       for (const [k, v] of Object.entries(fields)) {
         const input = document.createElement("input");
@@ -96,6 +98,20 @@ export default function PilotPage() {
               className="bg-[var(--surface)]"
             />
           </div>
+          <div>
+            <label className="mb-1.5 block text-[13px] font-semibold text-[var(--ink-2)]">
+              Lab preset id
+            </label>
+            <Input
+              value={labId}
+              onChange={(e) => setLabId(e.target.value.trim())}
+              placeholder="inheritance · twos-complement · basics"
+              className="bg-[var(--surface)] font-mono text-sm"
+            />
+            <p className="mt-1.5 text-[12px] text-[var(--ink-3)]">
+              Bakes goals into the quiz (e.g. extends / super / @Override).
+            </p>
+          </div>
           <Button
             type="button"
             className="h-10 px-4"
@@ -105,6 +121,18 @@ export default function PilotPage() {
             Launch assignment from course
           </Button>
         </div>
+
+        <p className="mt-6 text-sm text-[var(--ink-3)]">
+          Share a student link from{" "}
+          <a className="font-semibold text-[var(--brand)] underline" href="/instructor">
+            /instructor
+          </a>
+          . TAs verify codes at{" "}
+          <a className="font-semibold text-[var(--brand)] underline" href="/ta">
+            /ta
+          </a>
+          .
+        </p>
 
         <p className="mt-6 text-sm text-[var(--ink-3)]">
           Real D2L registration uses{" "}

@@ -1,11 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { scanSymbols } from "@/lib/symbol-scan";
 import { SAMPLE_PROGRAM } from "@/lib/sample-program";
+import { normalizeSourceFiles } from "@/lib/mock-quiz";
+import { missCoach } from "@/lib/miss-coach";
+import { getLabPreset, type LabPreset } from "@/lib/lab-presets";
 import type {
   FaAnswer,
   FaScored,
@@ -40,6 +44,7 @@ type CourseSession = {
   courseTitle: string;
   assignmentTitle: string;
   returnUrl?: string;
+  labId?: string;
 };
 
 type OllamaStatus = {
@@ -69,8 +74,10 @@ function fmtBytes(b: number) {
 }
 
 export function CodeQuizGrader() {
+  const search = useSearchParams();
   const [step, setStep] = useState<Step>(1);
   const [course, setCourse] = useState<CourseSession | null>(null);
+  const [lab, setLab] = useState<LabPreset | null>(null);
   const [ollama, setOllama] = useState<OllamaStatus | null>(null);
   const [quizMode, setQuizMode] = useState<"ollama" | "local" | null>(null);
   const [modelUsed, setModelUsed] = useState<string | null>(null);
@@ -129,6 +136,7 @@ export function CodeQuizGrader() {
             courseTitle: data.session.courseTitle,
             assignmentTitle: data.session.assignmentTitle,
             returnUrl: data.session.returnUrl,
+            labId: data.session.labId,
           });
         }
       } catch {
@@ -136,6 +144,24 @@ export function CodeQuizGrader() {
       }
     })();
   }, [refreshOllama]);
+
+  useEffect(() => {
+    const fromUrl = search.get("lab");
+    const id = fromUrl || course?.labId || null;
+    if (!id) {
+      setLab(null);
+      return;
+    }
+    const local = getLabPreset(id);
+    if (local) {
+      setLab(local);
+      return;
+    }
+    void fetch(`/api/labs?id=${encodeURIComponent(id)}`)
+      .then((r) => r.json())
+      .then((d: { lab?: LabPreset }) => setLab(d.lab || null))
+      .catch(() => setLab(null));
+  }, [search, course?.labId]);
 
   const sourceFiles: SourceFile[] = useMemo(
     () => files.map((f) => ({ name: f.name, content: f.content })),
@@ -166,7 +192,7 @@ export function CodeQuizGrader() {
       setBusy(true);
       setBusyLabel(
         ollama?.ok
-          ? `Asking ${ollama.selected} about your code…`
+          ? "Building your quiz from your code…"
           : "Building your quiz from the uploaded code…",
       );
       setError(null);
@@ -181,6 +207,7 @@ export function CodeQuizGrader() {
             faCount: DEFAULT_FA,
             attempt: nextAttempt,
             model: ollama?.selected || undefined,
+            labId: lab?.id || course?.labId || search.get("lab") || null,
           }),
         });
         const data = await res.json();
@@ -206,13 +233,45 @@ export function CodeQuizGrader() {
         autoGenLock.current = false;
       }
     },
-    [go, ollama?.ok, ollama?.selected, refreshOllama],
+    [go, ollama?.ok, ollama?.selected, refreshOllama, lab?.id, course?.labId, search],
   );
+
+  const persistClearance = async (result: SubmitResult) => {
+    try {
+      await fetch("/api/clearance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: result.completionId,
+          submittedAt: result.submittedAt,
+          userName: course?.userName || "Student",
+          courseTitle: course?.courseTitle || "Local practice",
+          assignmentTitle:
+            course?.assignmentTitle || lab?.title || "Understanding check",
+          labId: lab?.id || course?.labId || null,
+          fileNames: files.map((f) => f.name),
+          files: sourceFiles,
+          understandingPct: 100,
+          mode: result.mode,
+          isDevSim: course?.isDevSim,
+        }),
+      });
+    } catch {
+      /* local verify still works from localStorage for this browser */
+    }
+  };
 
   const setFilesReady = (
     next: { name: string; size: number; content: string }[],
   ) => {
-    setFiles(next);
+    const normalized = normalizeSourceFiles(
+      next.map((f) => ({ name: f.name, content: f.content })),
+    ).map((f, i) => ({
+      name: f.name,
+      content: f.content,
+      size: next[i]?.size ?? new TextEncoder().encode(f.content).length,
+    }));
+    setFiles(normalized);
     setError(null);
   };
 
@@ -374,6 +433,7 @@ export function CodeQuizGrader() {
           files: files.map((f) => f.name),
         });
         localStorage.setItem(COMPLETION_KEY, JSON.stringify(prev.slice(0, 20)));
+        await persistClearance(local);
         setSubmitResult(local);
         go(4);
         return;
@@ -403,6 +463,7 @@ export function CodeQuizGrader() {
         files: files.map((f) => f.name),
       });
       localStorage.setItem(COMPLETION_KEY, JSON.stringify(prev.slice(0, 20)));
+      await persistClearance(result);
       setSubmitResult(result);
       go(4);
     } catch (e) {
@@ -444,12 +505,6 @@ export function CodeQuizGrader() {
     }
   };
 
-  const ollamaLine = ollama
-    ? ollama.ok && ollama.selected
-      ? ollama.selected
-      : "on-device fallback"
-    : null;
-
   const kindClass = (kind: string) => {
     if (kind === "fn") return "border-[var(--brand)]/40 text-[var(--brand)]";
     if (kind === "format") return "border-amber-300 text-amber-800";
@@ -463,20 +518,28 @@ export function CodeQuizGrader() {
         <p className="pf-brand">Preflight</p>
 
         <p className="mt-5 max-w-[26rem] text-[1.08rem] leading-[1.55] text-[var(--ink-2)]">
-          Show you understand the code you wrote. Pass once at 100% — then
-          submit your lab.
+          No API key. Upload the code for this lab, pass once at 100%, copy your
+          clearance code — then you’re cleared to submit.
         </p>
 
-        {course && (
+        {(course || lab) && (
           <div className="mt-5 rounded-xl border border-[var(--line)] bg-white/80 px-3.5 py-2.5">
             <p className="text-[13px] font-semibold tracking-tight text-[var(--ink)]">
-              {course.assignmentTitle.replace(/\s*·\s*/g, " · ")}
+              {(course?.assignmentTitle || lab?.title || "").replace(
+                /\s*·\s*/g,
+                " · ",
+              )}
             </p>
             <p className="mt-0.5 text-[12px] text-[var(--ink-3)]">
-              {course.courseTitle}
-              {course.userName ? ` · ${course.userName}` : ""}
-              {course.isDevSim ? " · demo" : ""}
+              {course?.courseTitle || lab?.courseHint || ""}
+              {course?.userName ? ` · ${course.userName}` : ""}
+              {course?.isDevSim ? " · demo" : ""}
             </p>
+            {lab && lab.goals.length > 0 && (
+              <p className="mt-2 text-[12px] text-[var(--ink-2)]">
+                Focus: {lab.focus.slice(0, 4).join(", ") || lab.goals[0]}
+              </p>
+            )}
           </div>
         )}
 
@@ -485,11 +548,10 @@ export function CodeQuizGrader() {
             <span className="pf-step-dot" aria-hidden />
             {STEP_LABELS[step]}
           </span>
-          {ollamaLine && (
-            <span className="hidden text-[11px] text-[var(--ink-3)] sm:inline">
-              {ollamaLine}
-            </span>
-          )}
+          <span className="text-[11px] text-[var(--ink-3)]">
+            {ollama?.ok ? "Host quiz engine" : "On-device quiz"}
+            {attempt > 0 ? ` · retry ${attempt + 1}` : ""}
+          </span>
         </div>
       </header>
 
@@ -868,13 +930,22 @@ export function CodeQuizGrader() {
                 <div
                   className={cn(
                     "mt-1 text-xs",
-                    a.score === 1 ? "text-[var(--ink-2)]" : "text-red-600",
+                    a.score === 1 ? "text-[var(--green)]" : "text-red-600",
                   )}
                 >
-                  {a.score === 1
-                    ? "Correct"
-                    : `Not quite · correct is ${a.correct}`}
+                  {a.score === 1 ? "Correct" : `Missed · answer is ${a.correct}`}
                 </div>
+                {a.score === 0 && (
+                  <p className="mt-1.5 text-[13px] leading-snug text-[var(--ink-2)]">
+                    {missCoach({
+                      question: a.question,
+                      correct: a.correct,
+                      options: a.options,
+                      fileNames: files.map((f) => f.name),
+                      symbols: radarHits.map((h) => h.label),
+                    })}
+                  </p>
+                )}
               </div>
             ))}
             {faResults.map((s, i) => (
@@ -957,6 +1028,10 @@ export function CodeQuizGrader() {
               <p className="mt-2 text-xs text-[var(--ink-3)]">
                 {new Date(submitResult.submittedAt).toLocaleString()}
                 {submitResult.mode === "ags" ? " · posted to iCollege" : ""}
+                {" · "}
+                <a href="/ta" className="font-semibold text-[var(--brand)] underline">
+                  TA can verify here
+                </a>
               </p>
             </div>
           </div>
