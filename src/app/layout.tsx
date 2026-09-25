@@ -15,9 +15,9 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Preflight · before you submit",
+  title: "Preflight · understanding before submit",
   description:
-    "Drop your lab code, clear a short briefing built from it, get stamped to submit.",
+    "Submit code, clear a code-specific understanding interview, then turn in for grading.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
