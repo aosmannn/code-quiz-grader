@@ -81,10 +81,10 @@ export default function TryPageInner() {
       <div className="mx-auto max-w-md px-5 py-20 text-center">
         <p className="pf-brand mb-4">Preflight</p>
         <p className="mb-2 text-[var(--ink-2)]">
-          {lab ? `Opening ${lab.title}…` : "Opening your check…"}
+          {lab ? `Opening ${lab.title}…` : "Opening your briefing…"}
         </p>
         <p className="mb-8 text-sm text-[var(--ink-3)]">
-          No API key. Upload your code, pass once, get cleared to submit.
+          No API key. Your code is the quiz. Pass once → stamped to submit.
         </p>
         <Button
           type="button"

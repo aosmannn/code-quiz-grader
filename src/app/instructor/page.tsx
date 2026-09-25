@@ -32,14 +32,14 @@ export default function InstructorPage() {
   return (
     <main className="pf-shell">
       <div className="mx-auto max-w-2xl px-5 py-12 sm:py-16">
-        <p className="text-sm font-medium text-[var(--ink-3)]">Instructor</p>
-        <h1 className="mt-2 text-[2rem] font-semibold tracking-tight text-[var(--ink)]">
+        <p className="pf-kicker">Instructor</p>
+        <h1 className="mt-2 text-[2.4rem] font-extrabold tracking-tight text-[var(--ink)]">
           Lab presets
         </h1>
         <p className="mt-3 max-w-xl text-[1.02rem] leading-relaxed text-[var(--ink-2)]">
-          Pick a lab. Students get a one-click link — no API keys, no question
-          knobs. They upload, pass at 100%, and earn a clearance code TAs can
-          verify.
+          Pick a lab. Students click one link — no API keys, no knobs. Their
+          code goes on stage, they clear a briefing, get stamped. TAs verify
+          the code.
         </p>
 
         <div className="mt-8 space-y-4">

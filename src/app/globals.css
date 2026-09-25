@@ -7,9 +7,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
+  --font-sans: var(--font-display);
   --font-mono: var(--font-mono);
-  --font-heading: var(--font-sans);
+  --font-heading: var(--font-display);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -49,53 +49,58 @@
 }
 
 :root {
-  --ink: #0c1222;
-  --ink-2: #5b6578;
-  --ink-3: #8b93a7;
-  --paper: #f6f7f9;
-  --surface: #ffffff;
-  --line: #e4e7ee;
-  --line-2: #cfd5e2;
-  --brand: #2f5bff;
-  --brand-soft: #eef2ff;
-  --green: #1a7f4b;
-  --green-soft: #eaf7f0;
-  --amber: #9a6700;
-  --sky: #2f5bff;
-  --sky-soft: #eef2ff;
-  --signal: #2f5bff;
-  --background: #f6f7f9;
-  --foreground: #0c1222;
-  --card: #ffffff;
-  --card-foreground: #0c1222;
-  --popover: #ffffff;
-  --popover-foreground: #0c1222;
-  --primary: #0c1222;
-  --primary-foreground: #ffffff;
-  --secondary: #eef0f4;
-  --secondary-foreground: #0c1222;
-  --muted: #eef0f4;
-  --muted-foreground: #5b6578;
-  --accent: #eef0f4;
-  --accent-foreground: #0c1222;
-  --destructive: #c62828;
-  --border: #e4e7ee;
-  --input: #e4e7ee;
-  --ring: #2f5bff;
-  --chart-1: #2f5bff;
-  --chart-2: #0c1222;
-  --chart-3: #5b6578;
-  --chart-4: #8b93a7;
-  --chart-5: #cfd5e2;
-  --radius: 0.875rem;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #0c1222;
-  --sidebar-primary: #0c1222;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #eef0f4;
-  --sidebar-accent-foreground: #0c1222;
-  --sidebar-border: #e4e7ee;
-  --sidebar-ring: #2f5bff;
+  /* Runway / hangar — not Mikler cream, not blue SaaS */
+  --ink: #14201c;
+  --ink-2: #4a5c55;
+  --ink-3: #7a8c84;
+  --paper: #e8efeb;
+  --surface: #f4f8f5;
+  --line: #c5d4cc;
+  --line-2: #9db0a6;
+  --brand: #0f6b5c;
+  --brand-soft: #d7ece6;
+  --signal: #e85d04;
+  --signal-soft: #ffe8d6;
+  --green: #0f6b5c;
+  --green-soft: #d7ece6;
+  --amber: #c45c00;
+  --sky: #0f6b5c;
+  --sky-soft: #d7ece6;
+  --code-bg: #101a17;
+  --code-fg: #d7ebe3;
+  --code-mute: #7a9a8e;
+  --background: #e8efeb;
+  --foreground: #14201c;
+  --card: #f4f8f5;
+  --card-foreground: #14201c;
+  --popover: #f4f8f5;
+  --popover-foreground: #14201c;
+  --primary: #14201c;
+  --primary-foreground: #f4f8f5;
+  --secondary: #d7ece6;
+  --secondary-foreground: #14201c;
+  --muted: #dce8e2;
+  --muted-foreground: #4a5c55;
+  --accent: #d7ece6;
+  --accent-foreground: #14201c;
+  --destructive: #c0392b;
+  --border: #c5d4cc;
+  --input: #c5d4cc;
+  --ring: #0f6b5c;
+  --chart-1: #0f6b5c;
+  --chart-2: #e85d04;
+  --chart-3: #14201c;
+  --chart-4: #7a8c84;
+  --chart-5: #c5d4cc;
+  --radius: 0.5rem;
+  --sidebar: #f4f8f5;
+  --sidebar-foreground: #14201c;
+  --sidebar-primary: #14201c;
+  --sidebar-primary-foreground: #f4f8f5;
+  --sidebar-accent: #d7ece6;
+  --sidebar-accent-foreground: #14201c;
+  --sidebar-border: #c5d4cc;
+  --sidebar-ring: #0f6b5c;
 }
 
 @layer base {
@@ -104,9 +109,15 @@
   }
   body {
     @apply bg-[var(--paper)] text-[var(--ink)];
+    font-family: var(--font-display), system-ui, sans-serif;
   }
   html {
     @apply font-sans;
+  }
+  code,
+  pre,
+  .font-mono {
+    font-family: var(--font-mono), ui-monospace, monospace;
   }
 }
 
@@ -117,29 +128,35 @@
   overflow-x: clip;
   color: var(--ink);
   background:
-    radial-gradient(900px 420px at 15% -5%, rgba(47, 91, 255, 0.08), transparent 55%),
-    radial-gradient(700px 360px at 90% 0%, rgba(12, 18, 34, 0.04), transparent 50%),
-    linear-gradient(180deg, #ffffff 0%, #f6f7f9 42%, #f3f5f8 100%);
+    linear-gradient(90deg, rgba(20, 32, 28, 0.03) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(20, 32, 28, 0.03) 1px, transparent 1px),
+    radial-gradient(900px 480px at 8% -10%, rgba(232, 93, 4, 0.12), transparent 55%),
+    radial-gradient(700px 420px at 100% 0%, rgba(15, 107, 92, 0.14), transparent 50%),
+    linear-gradient(165deg, #f2f7f4 0%, #e8efeb 45%, #dde8e2 100%);
+  background-size:
+    48px 48px,
+    48px 48px,
+    auto,
+    auto,
+    auto;
 }
 
 .pf-panel {
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 92%, white);
   border: 1px solid var(--line);
-  border-radius: 1.1rem;
-  padding: 1.35rem 1.4rem;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.9) inset,
-    0 18px 40px -28px rgba(12, 18, 34, 0.28);
-  animation: pf-rise 0.45s ease both;
+  border-radius: 0.35rem;
+  padding: 1.25rem 1.3rem;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.65) inset;
+  animation: pf-rise 0.4s ease both;
 }
 
 .pf-err {
-  background: #fff5f5;
-  border: 1px solid #ffc9c9;
-  border-radius: 0.75rem;
+  background: #fff1ee;
+  border: 1px solid #f0b4a8;
+  border-radius: 0.35rem;
   padding: 0.75rem 1rem;
   font-size: 0.875rem;
-  color: #c62828;
+  color: #a33224;
 }
 
 .pf-spin {
@@ -155,46 +172,153 @@
 
 .pf-drop {
   border: 1.5px dashed var(--line-2);
-  border-radius: 1.15rem;
-  padding: 2.6rem 1.5rem 2.4rem;
+  border-radius: 0.35rem;
+  padding: 3rem 1.5rem 2.75rem;
   text-align: center;
   cursor: pointer;
-  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease,
-    box-shadow 0.18s ease;
-  background: linear-gradient(180deg, #ffffff 0%, #f5f7fb 100%);
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+  background: rgba(244, 248, 245, 0.7);
 }
 
 .pf-drop:hover,
 .pf-drop.over {
-  border-color: color-mix(in srgb, var(--brand) 55%, var(--line-2));
+  border-color: var(--brand);
   background: var(--brand-soft);
-  transform: translateY(-1px);
-  box-shadow: 0 16px 30px -24px rgba(47, 91, 255, 0.55);
+  transform: translateY(-2px);
 }
 
 .pf-brand {
-  font-size: clamp(2.85rem, 8vw, 3.85rem);
-  font-weight: 700;
-  letter-spacing: -0.05em;
-  line-height: 0.92;
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: clamp(3.2rem, 11vw, 4.6rem);
+  font-weight: 800;
+  letter-spacing: -0.06em;
+  line-height: 0.88;
   color: var(--ink);
 }
 
-.pf-step {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--ink-2);
+.pf-kicker {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--signal);
 }
 
-.pf-step-dot {
-  width: 0.45rem;
-  height: 0.45rem;
+.pf-runway {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.pf-runway-light {
+  height: 4px;
+  flex: 1;
   border-radius: 999px;
+  background: var(--line);
+  transition: background 0.25s ease, box-shadow 0.25s ease;
+}
+
+.pf-runway-light.on {
   background: var(--brand);
-  box-shadow: 0 0 0 4px rgba(47, 91, 255, 0.12);
+  box-shadow: 0 0 0 3px rgba(15, 107, 92, 0.15);
+}
+
+.pf-runway-light.hot {
+  background: var(--signal);
+  box-shadow: 0 0 0 3px rgba(232, 93, 4, 0.18);
+}
+
+.pf-code-stage {
+  position: relative;
+  border: 1px solid #1e3029;
+  border-radius: 0.35rem;
+  background: var(--code-bg);
+  overflow: hidden;
+  animation: pf-rise 0.5s ease both;
+}
+
+.pf-code-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(232, 93, 4, 0.08) 0%,
+    transparent 28%
+  );
+  pointer-events: none;
+}
+
+.pf-target {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid color-mix(in srgb, var(--signal) 45%, transparent);
+  background: rgba(232, 93, 4, 0.12);
+  color: #ffd9b8;
+  border-radius: 0.25rem;
+  padding: 0.28rem 0.55rem;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.7rem;
+  animation: pf-pulse 2.4s ease-in-out infinite;
+}
+
+.pf-brief-opt {
+  display: flex;
+  cursor: pointer;
+  align-items: flex-start;
+  gap: 0.75rem;
+  border: 1.5px solid var(--line);
+  border-radius: 0.35rem;
+  background: var(--surface);
+  padding: 0.95rem 1rem;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.pf-brief-opt:hover {
+  border-color: var(--line-2);
+  transform: translateX(2px);
+}
+
+.pf-brief-opt.sel {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.pf-stamp {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: min(100%, 280px);
+  aspect-ratio: 1.35;
+  margin: 0.5rem auto 0;
+  border: 3px solid var(--signal);
+  border-radius: 0.5rem;
+  color: var(--signal);
+  background: color-mix(in srgb, var(--signal-soft) 70%, transparent);
+  transform: rotate(-8deg) scale(0.6);
+  opacity: 0;
+  animation: pf-stamp 0.7s cubic-bezier(0.2, 1.4, 0.4, 1) 0.15s forwards;
+}
+
+.pf-stamp strong {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.pf-stamp span {
+  margin-top: 0.35rem;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .cqg-shell {
@@ -206,16 +330,15 @@
 .cqg-card {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 1.1rem;
+  border-radius: 0.35rem;
   padding: 1.35rem 1.4rem;
   margin-bottom: 1rem;
-  box-shadow: 0 18px 40px -28px rgba(12, 18, 34, 0.28);
 }
 
 .cqg-card-title {
   font-size: 1.15rem;
-  font-weight: 650;
-  letter-spacing: -0.02em;
+  font-weight: 700;
+  letter-spacing: -0.03em;
   margin-bottom: 0.35rem;
 }
 
@@ -227,12 +350,12 @@
 }
 
 .cqg-err {
-  background: #fff5f5;
-  border: 1px solid #ffc9c9;
-  border-radius: 0.75rem;
+  background: #fff1ee;
+  border: 1px solid #f0b4a8;
+  border-radius: 0.35rem;
   padding: 0.75rem 1rem;
   font-size: 0.875rem;
-  color: #c62828;
+  color: #a33224;
 }
 
 .cqg-spin {
@@ -268,7 +391,7 @@
 @keyframes pf-rise {
   from {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(14px);
   }
   to {
     opacity: 1;
@@ -285,6 +408,27 @@
   }
 }
 
+@keyframes pf-pulse {
+  0%,
+  100% {
+    opacity: 0.75;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes pf-stamp {
+  to {
+    opacity: 1;
+    transform: rotate(-8deg) scale(1);
+  }
+}
+
 .pf-hero {
   animation: pf-fade 0.55s ease both;
+}
+
+.pf-slide {
+  animation: pf-rise 0.35s ease both;
 }

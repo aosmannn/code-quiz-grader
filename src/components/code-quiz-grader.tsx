@@ -24,18 +24,14 @@ const ACCEPT =
 
 const DEFAULT_MC = 4;
 const DEFAULT_FA = 2;
-
 const COMPLETION_KEY = "cqg_completions";
 
 type Step = 1 | 2 | 3 | 4;
 type IntakeMode = "upload" | "paste";
 
-const STEP_LABELS: Record<Step, string> = {
-  1: "1 · Code",
-  2: "2 · Answer",
-  3: "3 · Score",
-  4: "4 · Cleared",
-};
+type BriefItem =
+  | { kind: "mc"; index: number; q: McQuestion }
+  | { kind: "fa"; index: number; id: number; question: string };
 
 type CourseSession = {
   sessionId: string;
@@ -87,6 +83,7 @@ export function CodeQuizGrader() {
     { name: string; size: number; content: string }[]
   >([]);
   const [quizData, setQuizData] = useState<QuizData>({ mc: [], fa: [] });
+  const [briefIndex, setBriefIndex] = useState(0);
   const [mcChosen, setMcChosen] = useState<Record<number, McQuestion["answer"]>>(
     {},
   );
@@ -174,10 +171,23 @@ export function CodeQuizGrader() {
     const first = files[0];
     if (!first) return null;
     const lines = first.content.replace(/\r\n/g, "\n").split("\n");
-    const shown = lines.slice(0, 14).join("\n");
-    const more = lines.length > 14 ? `\n… ${lines.length - 14} more lines` : "";
-    return { name: first.name, text: shown + more };
+    const shown = lines.slice(0, 18);
+    const more = lines.length > 18 ? lines.length - 18 : 0;
+    return { name: first.name, lines: shown, more };
   }, [files]);
+
+  const briefing: BriefItem[] = useMemo(() => {
+    const items: BriefItem[] = [];
+    (quizData.mc || []).forEach((q, index) =>
+      items.push({ kind: "mc", index, q }),
+    );
+    (quizData.fa || []).forEach((q, index) =>
+      items.push({ kind: "fa", index, id: q.id, question: q.question }),
+    );
+    return items;
+  }, [quizData]);
+
+  const currentBrief = briefing[briefIndex] || null;
 
   const go = useCallback((n: Step) => {
     setError(null);
@@ -190,11 +200,7 @@ export function CodeQuizGrader() {
       if (fileList.length === 0 || autoGenLock.current) return;
       autoGenLock.current = true;
       setBusy(true);
-      setBusyLabel(
-        ollama?.ok
-          ? "Building your quiz from your code…"
-          : "Building your quiz from the uploaded code…",
-      );
+      setBusyLabel("Building a briefing from your code…");
       setError(null);
       setNotice(null);
       try {
@@ -217,6 +223,7 @@ export function CodeQuizGrader() {
         setModelUsed(data.model || null);
         if (data.notice) setNotice(data.notice);
         setAttempt(nextAttempt);
+        setBriefIndex(0);
         setMcChosen({});
         setFaAnswers({});
         setMcResults([]);
@@ -233,7 +240,7 @@ export function CodeQuizGrader() {
         autoGenLock.current = false;
       }
     },
-    [go, ollama?.ok, ollama?.selected, refreshOllama, lab?.id, course?.labId, search],
+    [go, ollama?.selected, refreshOllama, lab?.id, course?.labId, search],
   );
 
   const persistClearance = async (result: SubmitResult) => {
@@ -330,13 +337,13 @@ export function CodeQuizGrader() {
     const missingFA = faList.filter((_, i) => !(faAnswers[i] || "").trim()).length;
     if (missingMC || missingFA) {
       setError(
-        `Please answer every question. Missing: ${missingMC} multiple-choice, ${missingFA} free-answer.`,
+        `Answer every check before finishing. Missing: ${missingMC} choice, ${missingFA} write-in.`,
       );
       return;
     }
 
     setBusy(true);
-    setBusyLabel("Checking your answers…");
+    setBusyLabel("Checking your briefing…");
     setError(null);
     try {
       const mcScored: McScored[] = mcList.map((q, i) => {
@@ -386,6 +393,27 @@ export function CodeQuizGrader() {
     }
   };
 
+  const advanceBrief = () => {
+    if (!currentBrief) return;
+    if (currentBrief.kind === "mc" && !mcChosen[currentBrief.index]) {
+      setError("Pick an option to continue.");
+      return;
+    }
+    if (
+      currentBrief.kind === "fa" &&
+      !(faAnswers[currentBrief.index] || "").trim()
+    ) {
+      setError("Write a short answer — name something from your code.");
+      return;
+    }
+    setError(null);
+    if (briefIndex >= briefing.length - 1) {
+      void submitAnswers();
+      return;
+    }
+    setBriefIndex((i) => i + 1);
+  };
+
   const mcTotal = mcResults.reduce((s, a) => s + a.score, 0);
   const mcMax = mcResults.length;
   const faTotal = faResults.reduce((s, a) => s + a.score, 0);
@@ -403,6 +431,7 @@ export function CodeQuizGrader() {
     setFaResults([]);
     setFaAnswerRows([]);
     setSubmitResult(null);
+    setBriefIndex(0);
     setError(null);
     void generateQuiz(sourceFiles, attempt + 1);
   };
@@ -410,7 +439,7 @@ export function CodeQuizGrader() {
   const turnIn = async () => {
     if (!perfect) return;
     setBusy(true);
-    setBusyLabel("Submitting to your course…");
+    setBusyLabel("Stamping your clearance…");
     setError(null);
     try {
       if (!course) {
@@ -420,7 +449,7 @@ export function CodeQuizGrader() {
           ok: true,
           mode: "stub",
           message:
-            "Check marked complete on this device. Open from the assignment link (iCollege or /try) so the course can record that you’re cleared to submit.",
+            "You’re cleared on this device. Open from the assignment link so iCollege can unlock Submit.",
           completionId,
           submittedAt,
           gradePassback: { scoreGiven: 100, scoreMaximum: 100 },
@@ -486,6 +515,7 @@ export function CodeQuizGrader() {
     setModelUsed(null);
     setNotice(null);
     setAttempt(0);
+    setBriefIndex(0);
     setError(null);
     setBusy(false);
     setPasteText("");
@@ -505,276 +535,285 @@ export function CodeQuizGrader() {
     }
   };
 
-  const kindClass = (kind: string) => {
-    if (kind === "fn") return "border-[var(--brand)]/40 text-[var(--brand)]";
-    if (kind === "format") return "border-amber-300 text-amber-800";
-    if (kind === "type") return "border-sky-300 text-sky-800";
-    return "border-[var(--line)] text-[var(--ink-2)]";
-  };
+  const phaseLabel =
+    step === 1
+      ? files.length
+        ? "Your code"
+        : "Drop your lab"
+      : step === 2
+        ? "Briefing"
+        : step === 3
+          ? perfect
+            ? "All clear"
+            : "Debrief"
+          : "Cleared";
 
   return (
-    <div className="mx-auto max-w-[540px] px-5 pb-24 pt-12 sm:pt-16">
-      <header className="pf-hero mb-9">
-        <p className="pf-brand">Preflight</p>
-
-        <p className="mt-5 max-w-[26rem] text-[1.08rem] leading-[1.55] text-[var(--ink-2)]">
-          No API key. Upload the code for this lab, pass once at 100%, copy your
-          clearance code — then you’re cleared to submit.
+    <div className="mx-auto max-w-[560px] px-5 pb-28 pt-10 sm:pt-14">
+      <header className="pf-hero mb-8">
+        <p className="pf-kicker">Before you submit</p>
+        <h1 className="pf-brand mt-2">Preflight</h1>
+        <p className="mt-5 max-w-[28rem] text-[1.05rem] font-medium leading-[1.55] text-[var(--ink-2)]">
+          Not a quiz playground. Drop the code you just wrote — we build a short
+          briefing from <em className="not-italic text-[var(--ink)]">your</em>{" "}
+          symbols. Pass once. Get stamped. Then submit.
         </p>
 
         {(course || lab) && (
-          <div className="mt-5 rounded-xl border border-[var(--line)] bg-white/80 px-3.5 py-2.5">
+          <div className="mt-5 border border-[var(--line)] bg-[var(--surface)] px-3.5 py-2.5">
             <p className="text-[13px] font-semibold tracking-tight text-[var(--ink)]">
-              {(course?.assignmentTitle || lab?.title || "").replace(
-                /\s*·\s*/g,
-                " · ",
-              )}
+              {course?.assignmentTitle || lab?.title}
             </p>
-            <p className="mt-0.5 text-[12px] text-[var(--ink-3)]">
+            <p className="mt-0.5 font-mono text-[11px] text-[var(--ink-3)]">
               {course?.courseTitle || lab?.courseHint || ""}
               {course?.userName ? ` · ${course.userName}` : ""}
               {course?.isDevSim ? " · demo" : ""}
             </p>
-            {lab && lab.goals.length > 0 && (
-              <p className="mt-2 text-[12px] text-[var(--ink-2)]">
-                Focus: {lab.focus.slice(0, 4).join(", ") || lab.goals[0]}
-              </p>
-            )}
           </div>
         )}
 
-        <div className="mt-7 flex items-center justify-between gap-3 border-b border-[var(--line)] pb-4">
-          <span className="pf-step">
-            <span className="pf-step-dot" aria-hidden />
-            {STEP_LABELS[step]}
-          </span>
-          <span className="text-[11px] text-[var(--ink-3)]">
-            {ollama?.ok ? "Host quiz engine" : "On-device quiz"}
-            {attempt > 0 ? ` · retry ${attempt + 1}` : ""}
-          </span>
+        <div className="mt-7 space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <span className="font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--ink-3)]">
+              {phaseLabel}
+              {step === 2 && briefing.length > 0
+                ? ` · ${briefIndex + 1}/${briefing.length}`
+                : ""}
+              {attempt > 0 && step === 2 ? ` · retry ${attempt + 1}` : ""}
+            </span>
+            <span className="font-mono text-[10px] text-[var(--ink-3)]">
+              {ollama?.ok ? "host model" : "on-device"} · no API key
+            </span>
+          </div>
+          <div className="pf-runway" aria-hidden>
+            {[1, 2, 3, 4].map((n) => (
+              <div
+                key={n}
+                className={cn(
+                  "pf-runway-light",
+                  step > n && "on",
+                  step === n && (n === 4 ? "hot" : "on"),
+                )}
+              />
+            ))}
+          </div>
         </div>
       </header>
 
       {step === 1 && (
         <section className="space-y-4">
-          <div className="pf-panel">
-            <div className="mb-4 flex gap-1 rounded-xl bg-[#f1f3f8] p-1">
-              {(
-                [
-                  ["upload", "Upload file"],
-                  ["paste", "Paste code"],
-                ] as const
-              ).map(([id, label]) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setIntakeMode(id)}
-                  className={cn(
-                    "flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors",
-                    intakeMode === id
-                      ? "bg-white text-[var(--ink)] shadow-sm"
-                      : "text-[var(--ink-3)] hover:text-[var(--ink-2)]",
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            {intakeMode === "upload" ? (
-              <>
-                <div
-                  role="button"
-                  tabIndex={0}
-                  aria-label="Click to upload files"
-                  onClick={() => !busy && fileInputRef.current?.click()}
-                  onKeyDown={(e) => {
-                    if (!busy && (e.key === "Enter" || e.key === " "))
-                      fileInputRef.current?.click();
-                  }}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    setDragOver(true);
-                  }}
-                  onDragLeave={() => setDragOver(false)}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    setDragOver(false);
-                    if (!busy) void readFiles(e.dataTransfer.files);
-                  }}
-                  className={cn(
-                    "pf-drop",
-                    dragOver && "over",
-                    busy && "pointer-events-none opacity-70",
-                  )}
-                >
-                  <div
-                    className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-white text-[var(--brand)] shadow-sm ring-1 ring-[var(--line)]"
-                    aria-hidden
+          {files.length === 0 && (
+            <div className="pf-panel">
+              <div className="mb-4 flex gap-1 border border-[var(--line)] bg-[var(--paper)] p-1">
+                {(
+                  [
+                    ["upload", "Upload"],
+                    ["paste", "Paste"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setIntakeMode(id)}
+                    className={cn(
+                      "flex-1 px-3 py-2 text-sm font-semibold transition-colors",
+                      intakeMode === id
+                        ? "bg-[var(--ink)] text-[var(--surface)]"
+                        : "text-[var(--ink-3)] hover:text-[var(--ink-2)]",
+                    )}
                   >
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                      <path
-                        d="M10 13.5V3.5M10 3.5L6.5 7M10 3.5L13.5 7"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                      <path
-                        d="M3.5 12.5V14.5C3.5 15.6046 4.39543 16.5 5.5 16.5H14.5C15.6046 16.5 16.5 15.6046 16.5 14.5V12.5"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                        strokeLinecap="round"
-                      />
-                    </svg>
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {intakeMode === "upload" ? (
+                <>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Click to upload files"
+                    onClick={() => !busy && fileInputRef.current?.click()}
+                    onKeyDown={(e) => {
+                      if (!busy && (e.key === "Enter" || e.key === " "))
+                        fileInputRef.current?.click();
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setDragOver(true);
+                    }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setDragOver(false);
+                      if (!busy) void readFiles(e.dataTransfer.files);
+                    }}
+                    className={cn(
+                      "pf-drop",
+                      dragOver && "over",
+                      busy && "pointer-events-none opacity-70",
+                    )}
+                  >
+                    <p className="mb-2 text-[1.35rem] font-bold tracking-tight text-[var(--ink)]">
+                      Drop your lab here
+                    </p>
+                    <span className="text-sm text-[var(--ink-3)]">
+                      .java · .c · .py · whatever you just finished
+                    </span>
                   </div>
-                  <p className="mb-1.5 text-[1.08rem] font-semibold tracking-tight text-[var(--ink)]">
-                    Upload your lab files
-                  </p>
-                  <span className="text-sm text-[var(--ink-3)]">
-                    Drag & drop, or click to browse
-                  </span>
-                </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept={ACCEPT}
-                  className="hidden"
-                  onChange={(e) => {
-                    if (e.target.files) void readFiles(e.target.files);
-                  }}
-                />
-                <div className="mt-4">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept={ACCEPT}
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files) void readFiles(e.target.files);
+                    }}
+                  />
+                  <div className="mt-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={loadSample}
+                    >
+                      Try with a sample
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <label className="mb-1.5 block font-mono text-[11px] font-medium uppercase tracking-wide text-[var(--ink-3)]">
+                      Filename
+                    </label>
+                    <input
+                      value={pasteName}
+                      onChange={(e) => setPasteName(e.target.value)}
+                      className="h-10 w-full border border-[var(--line)] bg-white px-3 font-mono text-sm outline-none focus:border-[var(--brand)]"
+                      placeholder="UndergraduateStudent.java"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block font-mono text-[11px] font-medium uppercase tracking-wide text-[var(--ink-3)]">
+                      Paste code
+                    </label>
+                    <Textarea
+                      rows={10}
+                      value={pasteText}
+                      onChange={(e) => setPasteText(e.target.value)}
+                      placeholder="Paste the file you wrote for this lab…"
+                      className="min-h-[180px] rounded-sm font-mono text-[12px] leading-relaxed"
+                    />
+                  </div>
                   <Button
                     type="button"
-                    variant="outline"
                     disabled={busy}
-                    onClick={loadSample}
+                    onClick={applyPaste}
+                    className="h-10 px-4"
                   >
-                    Use sample instead
+                    Put it on the stage
                   </Button>
                 </div>
-              </>
-            ) : (
-              <div className="space-y-3">
-                <div>
-                  <label className="mb-1.5 block text-[12px] font-semibold text-[var(--ink-2)]">
-                    Filename
-                  </label>
-                  <input
-                    value={pasteName}
-                    onChange={(e) => setPasteName(e.target.value)}
-                    className="h-10 w-full rounded-xl border border-[var(--line)] bg-white px-3 text-sm outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-[rgba(47,91,255,0.12)]"
-                    placeholder="main.c"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-[12px] font-semibold text-[var(--ink-2)]">
-                    Your code
-                  </label>
-                  <Textarea
-                    rows={10}
-                    value={pasteText}
-                    onChange={(e) => setPasteText(e.target.value)}
-                    placeholder="Paste your program here…"
-                    className="min-h-[180px] font-mono text-[12px] leading-relaxed"
-                  />
-                </div>
-                <Button
-                  type="button"
-                  disabled={busy}
-                  onClick={applyPaste}
-                  className="h-10 px-4"
-                >
-                  Use pasted code
-                </Button>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
-          {files.length > 0 && (
-            <div className="pf-panel space-y-4">
-              <div>
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[var(--ink-3)]">
-                  In-app code
-                </p>
-                {codePreview && (
-                  <pre className="mt-2 max-h-56 overflow-auto rounded-xl border border-[var(--line)] bg-[#0c1222] p-3 font-mono text-[11px] leading-relaxed text-[#e8eef8]">
-                    <span className="mb-2 block text-[10px] text-[#8b93a7]">
-                      {codePreview.name}
-                    </span>
-                    {codePreview.text}
-                  </pre>
-                )}
+          {files.length > 0 && codePreview && (
+            <div className="space-y-4">
+              <div className="pf-code-stage">
+                <div className="relative z-[1] flex items-center justify-between border-b border-[#24332d] px-3.5 py-2.5">
+                  <span className="font-mono text-[11px] text-[var(--code-mute)]">
+                    {codePreview.name}
+                  </span>
+                  <span className="font-mono text-[10px] text-[var(--signal)]">
+                    live on stage
+                  </span>
+                </div>
+                <pre className="relative z-[1] max-h-[320px] overflow-auto p-0 font-mono text-[11.5px] leading-[1.55] text-[var(--code-fg)]">
+                  {codePreview.lines.map((line, i) => (
+                    <div key={i} className="flex gap-3 px-3.5 hover:bg-white/5">
+                      <span className="w-6 shrink-0 select-none text-right text-[var(--code-mute)]">
+                        {i + 1}
+                      </span>
+                      <span className="whitespace-pre-wrap break-all">
+                        {line || " "}
+                      </span>
+                    </div>
+                  ))}
+                  {codePreview.more > 0 && (
+                    <div className="px-3.5 py-2 font-mono text-[10px] text-[var(--code-mute)]">
+                      … {codePreview.more} more lines stay with the briefing
+                    </div>
+                  )}
+                </pre>
               </div>
 
-              <div>
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[var(--ink-3)]">
-                  What we’ll ask about
+              <div className="pf-panel space-y-3">
+                <p className="font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--ink-3)]">
+                  We’ll ask about
                 </p>
                 {radarHits.length > 0 ? (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {radarHits.map((h) => (
+                  <div className="flex flex-wrap gap-1.5">
+                    {radarHits.map((h, i) => (
                       <span
                         key={`${h.kind}:${h.label}`}
-                        className={cn(
-                          "rounded-md border bg-white px-2 py-1 font-mono text-[11px] font-medium",
-                          kindClass(h.kind),
-                        )}
+                        className="pf-target"
+                        style={{ animationDelay: `${i * 0.12}s` }}
                       >
                         {h.label}
                       </span>
                     ))}
                   </div>
                 ) : (
-                  <p className="mt-2 text-sm text-[var(--ink-3)]">
-                    We’ll pull questions from the structure of your file.
+                  <p className="text-sm text-[var(--ink-3)]">
+                    Structure of your file — constructors, overrides, calls.
                   </p>
                 )}
-              </div>
 
-              <ul className="space-y-1 border-t border-[var(--line)] pt-3">
-                {files.map((f) => (
-                  <li
-                    key={f.name}
-                    className="flex justify-between gap-2 font-mono text-[12px] text-[var(--ink-2)]"
+                <ul className="space-y-1 border-t border-[var(--line)] pt-3">
+                  {files.map((f) => (
+                    <li
+                      key={f.name}
+                      className="flex justify-between gap-2 font-mono text-[12px] text-[var(--ink-2)]"
+                    >
+                      <span className="truncate">{f.name}</span>
+                      <span className="shrink-0 text-[var(--ink-3)]">
+                        {fmtBytes(f.size)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <Button
+                    type="button"
+                    className="h-11 px-5 text-[15px]"
+                    disabled={busy}
+                    onClick={startQuiz}
                   >
-                    <span className="truncate">{f.name}</span>
-                    <span className="shrink-0 text-[var(--ink-3)]">
-                      {fmtBytes(f.size)}
+                    Begin briefing
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => {
+                      setFiles([]);
+                      setPasteText("");
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                    }}
+                  >
+                    Swap files
+                  </Button>
+                  {busy && (
+                    <span className="flex items-center gap-2 text-[13px] text-[var(--ink-3)]">
+                      <span className="pf-spin" />
+                      {busyLabel}
                     </span>
-                  </li>
-                ))}
-              </ul>
-
-              <div className="flex flex-wrap items-center gap-3">
-                <Button
-                  type="button"
-                  className="h-10 px-4"
-                  disabled={busy}
-                  onClick={startQuiz}
-                >
-                  Build my quiz
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => {
-                    setFiles([]);
-                    setPasteText("");
-                    if (fileInputRef.current) fileInputRef.current.value = "";
-                  }}
-                >
-                  Clear
-                </Button>
-                {busy && (
-                  <span className="flex items-center gap-2 text-[13px] text-[var(--ink-3)]">
-                    <span className="pf-spin" />
-                    {busyLabel}
-                  </span>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -783,103 +822,104 @@ export function CodeQuizGrader() {
         </section>
       )}
 
-      {step === 2 && (
-        <section>
-          <div className="pf-panel">
-            {notice && (
-              <div className="mb-4 rounded-lg border border-[var(--line)] bg-[#fafafa] px-3 py-2 text-[13px] text-[var(--ink-2)]">
+      {step === 2 && currentBrief && (
+        <section className="space-y-4">
+          {files[0] && (
+            <div className="flex items-center gap-2 overflow-hidden border border-[var(--line)] bg-[var(--code-bg)] px-3 py-2 font-mono text-[11px] text-[var(--code-mute)]">
+              <span className="text-[var(--signal)]">●</span>
+              <span className="truncate text-[var(--code-fg)]">
+                {files[0].name}
+              </span>
+              <span className="ml-auto shrink-0">check {briefIndex + 1}</span>
+            </div>
+          )}
+
+          <div key={briefIndex} className="pf-panel pf-slide space-y-4">
+            {notice && briefIndex === 0 && (
+              <p className="border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-[13px] text-[var(--ink-2)]">
                 {notice}
-              </div>
-            )}
-            {attempt > 0 && (
-              <p className="mb-4 text-xs text-[var(--ink-3)]">
-                Attempt {attempt + 1} — retries are free
-                {quizMode === "ollama" && modelUsed
-                  ? ` · via ${modelUsed}`
-                  : quizMode === "local"
-                    ? " · on-device"
-                    : ""}
               </p>
             )}
-            {(quizData.mc?.length ?? 0) > 0 && (
-              <>
-                <div className="mb-3 text-sm font-medium text-[var(--ink-3)]">
-                  Multiple-choice
-                </div>
-                {quizData.mc.map((q, i) => (
-                  <div key={q.id} className="mb-6 last:mb-0">
-                    <div className="mb-2 text-[15px] leading-relaxed">
-                      {q.question}
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      {(["A", "B", "C", "D"] as const).map((k) => {
-                        const chosen = mcChosen[i] === k;
-                        return (
-                          <label
-                            key={k}
-                            className={cn(
-                              "flex cursor-pointer items-start gap-2.5 rounded-lg border px-3.5 py-2.5 transition-colors",
-                              chosen
-                                ? "border-[var(--brand)] bg-[var(--brand-soft)]"
-                                : "border-[var(--line)] hover:border-[var(--line-2)]",
-                            )}
-                          >
-                            <input
-                              type="radio"
-                              name={`mc-${i}`}
-                              checked={chosen}
-                              onChange={() =>
-                                setMcChosen((prev) => ({ ...prev, [i]: k }))
-                              }
-                              className="mt-0.5 accent-[var(--brand)]"
-                            />
-                            <span className="text-sm">
-                              <strong>{k}.</strong> {q.options[k]}
-                            </span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </>
-            )}
-            {(quizData.fa?.length ?? 0) > 0 && (
-              <>
-                <div className="mb-3 mt-6 text-sm font-medium text-[var(--ink-3)]">
-                  Free-answer
-                </div>
-                {quizData.fa.map((q, i) => (
-                  <div key={q.id} className="mb-6 last:mb-0">
-                    <div className="mb-2 text-[15px] leading-relaxed">
-                      {q.question}
-                    </div>
-                    <Textarea
-                      rows={3}
-                      placeholder="Explain in your own words — name functions and variables from your code…"
-                      value={faAnswers[i] || ""}
-                      onChange={(e) =>
-                        setFaAnswers((prev) => ({
-                          ...prev,
-                          [i]: e.target.value,
-                        }))
-                      }
-                      className="min-h-[96px] text-sm"
-                    />
-                  </div>
-                ))}
-              </>
+
+            <p className="text-[1.15rem] font-semibold leading-snug tracking-tight text-[var(--ink)]">
+              {currentBrief.kind === "mc"
+                ? currentBrief.q.question
+                : currentBrief.question}
+            </p>
+
+            {currentBrief.kind === "mc" ? (
+              <div className="flex flex-col gap-2">
+                {(["A", "B", "C", "D"] as const).map((k) => {
+                  const chosen = mcChosen[currentBrief.index] === k;
+                  return (
+                    <label
+                      key={k}
+                      className={cn("pf-brief-opt", chosen && "sel")}
+                    >
+                      <input
+                        type="radio"
+                        name={`mc-${currentBrief.index}`}
+                        checked={chosen}
+                        onChange={() => {
+                          setError(null);
+                          setMcChosen((prev) => ({
+                            ...prev,
+                            [currentBrief.index]: k,
+                          }));
+                        }}
+                        className="mt-0.5 accent-[var(--brand)]"
+                      />
+                      <span className="text-[15px] leading-snug">
+                        <span className="mr-1.5 font-mono text-[12px] font-medium text-[var(--ink-3)]">
+                          {k}
+                        </span>
+                        {currentBrief.q.options[k]}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            ) : (
+              <Textarea
+                rows={4}
+                placeholder="Say it in your words — name a method or line from your file…"
+                value={faAnswers[currentBrief.index] || ""}
+                onChange={(e) => {
+                  setError(null);
+                  setFaAnswers((prev) => ({
+                    ...prev,
+                    [currentBrief.index]: e.target.value,
+                  }));
+                }}
+                className="min-h-[110px] rounded-sm text-[15px]"
+              />
             )}
           </div>
-          <div className="mt-4 flex flex-wrap items-center gap-3">
+
+          <div className="flex flex-wrap items-center gap-3">
             <Button
               type="button"
-              className="h-10 px-4"
+              className="h-11 px-5"
               disabled={busy}
-              onClick={() => void submitAnswers()}
+              onClick={advanceBrief}
             >
-              Check answers
+              {briefIndex >= briefing.length - 1
+                ? "Finish briefing"
+                : "Next check"}
             </Button>
+            {briefIndex > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy}
+                onClick={() => {
+                  setError(null);
+                  setBriefIndex((i) => Math.max(0, i - 1));
+                }}
+              >
+                Back
+              </Button>
+            )}
             <Button
               type="button"
               variant="outline"
@@ -895,97 +935,98 @@ export function CodeQuizGrader() {
               </span>
             )}
           </div>
-          {error && <div className="pf-err mt-3">{error}</div>}
+          {error && <div className="pf-err">{error}</div>}
         </section>
       )}
 
       {step === 3 && (
-        <section>
+        <section className="space-y-4">
           <div className="pf-panel">
-            <p className="mb-4 text-sm leading-relaxed text-[var(--ink-2)]">
-              {perfect
-                ? "Nice — you got everything right. Mark this complete, then turn in the real lab."
-                : "You need a perfect score to continue. Retries don’t cost anything."}
+            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--ink-3)]">
+              Debrief
             </p>
-            <div className="mb-5 rounded-xl border border-[var(--line)] bg-[#f8f9fc] px-4 py-4">
-              <div className="text-[2.1rem] font-semibold tracking-tight leading-none text-[var(--ink)]">
-                {grand} / {grandMax}
-              </div>
-              <div
-                className={cn(
-                  "mt-2 text-sm font-medium",
-                  perfect ? "text-[var(--green)]" : "text-[var(--ink-2)]",
-                )}
-              >
-                {perfect ? "Cleared" : "Keep going"}
-              </div>
+            <h2 className="mt-2 text-[1.75rem] font-bold tracking-tight">
+              {perfect ? "You’re cleared to stamp." : "Not yet — look closer."}
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-[var(--ink-2)]">
+              {perfect
+                ? "Every check matched your code. Stamp the clearance, then turn in the real lab."
+                : "Misses point at your symbols — not a textbook lecture. Retries are free."}
+            </p>
+            <div className="mt-4 font-mono text-[12px] text-[var(--ink-3)]">
+              {grand} / {grandMax} · need 100%
             </div>
 
-            {mcResults.map((a) => (
-              <div
-                key={a.id}
-                className="border-b border-[var(--line)] py-3 text-sm last:border-0"
-              >
-                <div className="font-medium">{a.question}</div>
+            <div className="mt-5 space-y-0 border-t border-[var(--line)]">
+              {mcResults.map((a) => (
                 <div
-                  className={cn(
-                    "mt-1 text-xs",
-                    a.score === 1 ? "text-[var(--green)]" : "text-red-600",
-                  )}
+                  key={a.id}
+                  className="border-b border-[var(--line)] py-3.5 text-sm last:border-0"
                 >
-                  {a.score === 1 ? "Correct" : `Missed · answer is ${a.correct}`}
-                </div>
-                {a.score === 0 && (
-                  <p className="mt-1.5 text-[13px] leading-snug text-[var(--ink-2)]">
-                    {missCoach({
-                      question: a.question,
-                      correct: a.correct,
-                      options: a.options,
-                      fileNames: files.map((f) => f.name),
-                      symbols: radarHits.map((h) => h.label),
-                    })}
-                  </p>
-                )}
-              </div>
-            ))}
-            {faResults.map((s, i) => (
-              <div
-                key={s.id}
-                className="border-b border-[var(--line)] py-3 text-sm last:border-0"
-              >
-                <div className="flex justify-between gap-3">
-                  <div className="font-medium">
-                    {faAnswerRows[i]?.question}
+                  <div className="font-medium leading-snug">{a.question}</div>
+                  <div
+                    className={cn(
+                      "mt-1 font-mono text-[11px] font-medium uppercase tracking-wide",
+                      a.score === 1
+                        ? "text-[var(--brand)]"
+                        : "text-[var(--signal)]",
+                    )}
+                  >
+                    {a.score === 1 ? "Clear" : `Miss · ${a.correct}`}
                   </div>
-                  <div className="font-semibold">{s.score}/10</div>
+                  {a.score === 0 && (
+                    <p className="mt-2 text-[13px] leading-snug text-[var(--ink-2)]">
+                      {missCoach({
+                        question: a.question,
+                        correct: a.correct,
+                        options: a.options,
+                        fileNames: files.map((f) => f.name),
+                        symbols: radarHits.map((h) => h.label),
+                      })}
+                    </p>
+                  )}
                 </div>
-                <div className="mt-1 text-[13px] text-[var(--ink-2)]">
-                  {s.feedback}
+              ))}
+              {faResults.map((s, i) => (
+                <div
+                  key={s.id}
+                  className="border-b border-[var(--line)] py-3.5 text-sm last:border-0"
+                >
+                  <div className="flex justify-between gap-3">
+                    <div className="font-medium">{faAnswerRows[i]?.question}</div>
+                    <div className="shrink-0 font-mono text-[12px]">
+                      {s.score}/10
+                    </div>
+                  </div>
+                  <div className="mt-1 text-[13px] text-[var(--ink-2)]">
+                    {s.feedback}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-          <div className="mt-4 flex flex-wrap gap-3">
+
+          <div className="flex flex-wrap gap-3">
             {perfect ? (
               <Button
                 type="button"
-                className="h-10 px-4"
+                className="h-11 px-5"
                 disabled={busy}
                 onClick={() => void turnIn()}
               >
-                Mark check complete
+                Stamp clearance
               </Button>
             ) : (
               <Button
                 type="button"
-                className="h-10 px-4"
+                className="h-11 px-5"
                 disabled={busy}
                 onClick={retryFreshQuiz}
               >
-                Try a new quiz
+                Fresh briefing
               </Button>
             )}
-            <Button type="button" variant="outline" onClick={resetAll}>
+            <Button type="button" variant="outline" disabled={busy} onClick={resetAll}>
               Start over
             </Button>
             {busy && (
@@ -995,25 +1036,29 @@ export function CodeQuizGrader() {
               </span>
             )}
           </div>
-          {error && <div className="pf-err mt-3">{error}</div>}
+          {error && <div className="pf-err">{error}</div>}
         </section>
       )}
 
       {step === 4 && submitResult && (
-        <section>
-          <div className="pf-panel">
-            <h2 className="text-[1.5rem] font-semibold tracking-tight text-[var(--ink)]">
-              Cleared to submit
-            </h2>
-            <p className="mt-2 text-sm leading-relaxed text-[var(--ink-2)]">
+        <section className="space-y-5">
+          <div className="pf-panel text-center">
+            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--ink-3)]">
+              Gate open
+            </p>
+            <div className="pf-stamp" aria-hidden>
+              <strong>Cleared</strong>
+              <span>to submit</span>
+            </div>
+            <p className="mx-auto mt-6 max-w-sm text-sm leading-relaxed text-[var(--ink-2)]">
               {submitResult.message}
             </p>
-            <div className="mt-5 rounded-xl border border-[var(--line)] bg-[#f8f9fc] px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-3)]">
-                Clearance code · show a TA if needed
+            <div className="mt-6 border border-[var(--line)] bg-[var(--paper)] px-4 py-3 text-left">
+              <p className="font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--ink-3)]">
+                Clearance code · show a TA
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <code className="rounded-lg bg-white px-2.5 py-1.5 font-mono text-[13px] text-[var(--ink)] ring-1 ring-[var(--line)]">
+                <code className="border border-[var(--line)] bg-white px-2.5 py-1.5 font-mono text-[13px] text-[var(--ink)]">
                   {submitResult.completionId}
                 </code>
                 <Button
@@ -1025,32 +1070,35 @@ export function CodeQuizGrader() {
                   {copied ? "Copied" : "Copy"}
                 </Button>
               </div>
-              <p className="mt-2 text-xs text-[var(--ink-3)]">
+              <p className="mt-2 font-mono text-[10px] text-[var(--ink-3)]">
                 {new Date(submitResult.submittedAt).toLocaleString()}
-                {submitResult.mode === "ags" ? " · posted to iCollege" : ""}
+                {submitResult.mode === "ags" ? " · iCollege unlock" : ""}
                 {" · "}
-                <a href="/ta" className="font-semibold text-[var(--brand)] underline">
-                  TA can verify here
+                <a
+                  href="/ta"
+                  className="font-semibold text-[var(--brand)] underline"
+                >
+                  TA verify
                 </a>
               </p>
             </div>
           </div>
-          <div className="mt-4 flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-3">
             {course?.returnUrl ? (
-              <Button type="button" className="h-10 px-4" asChild>
-                <a href={course.returnUrl}>Return to course</a>
+              <Button type="button" className="h-11 px-5" asChild>
+                <a href={course.returnUrl}>Back to course · submit</a>
               </Button>
             ) : null}
             <Button
               type="button"
               variant={course?.returnUrl ? "outline" : "default"}
               onClick={resetAll}
-              className="h-10 px-4"
+              className="h-11 px-5"
             >
-              {course?.returnUrl ? "Practice again" : "Start another check"}
+              {course?.returnUrl ? "Practice again" : "Another check"}
             </Button>
           </div>
-          {error && <div className="pf-err mt-3">{error}</div>}
+          {error && <div className="pf-err">{error}</div>}
         </section>
       )}
     </div>

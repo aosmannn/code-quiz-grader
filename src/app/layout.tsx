@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
-import { JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google";
+import { IBM_Plex_Mono, Syne } from "next/font/google";
 import "./globals.css";
 
-const sans = Plus_Jakarta_Sans({
-  variable: "--font-sans",
+const display = Syne({
+  variable: "--font-display",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["500", "600", "700", "800"],
 });
 
-const mono = JetBrains_Mono({
+const mono = IBM_Plex_Mono({
   variable: "--font-mono",
   subsets: ["latin"],
   weight: ["400", "500"],
@@ -17,16 +17,16 @@ const mono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Preflight · before you submit",
   description:
-    "Upload your lab code, answer a short quiz, get cleared to submit.",
+    "Drop your lab code, clear a short briefing built from it, get stamped to submit.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${sans.variable} ${mono.variable} h-full antialiased`}
+      className={`${display.variable} ${mono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-[var(--paper)] font-sans text-[var(--ink)]">
+      <body className="flex min-h-full flex-col bg-[var(--paper)] font-sans text-[var(--ink)]">
         {children}
       </body>
     </html>
