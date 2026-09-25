@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { CodeQuizGrader } from "@/components/code-quiz-grader";
+import { UnderstandingGate } from "@/components/understanding-gate";
 
 export default function HomePage() {
   return (
@@ -11,7 +11,7 @@ export default function HomePage() {
           </div>
         }
       >
-        <CodeQuizGrader />
+        <UnderstandingGate />
       </Suspense>
     </main>
   );

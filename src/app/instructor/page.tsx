@@ -89,11 +89,20 @@ export default function InstructorPage() {
           <Link className="font-semibold text-[var(--brand)] underline" href="/ta">
             TA verify clearances →
           </Link>
+          <Link
+            className="font-semibold text-[var(--brand)] underline"
+            href="/instructor/sessions"
+          >
+            Understanding sessions →
+          </Link>
           <Link className="text-[var(--ink-3)] underline" href="/pilot">
             Launch simulator
           </Link>
           <Link className="text-[var(--ink-3)] underline" href="/">
             Student home
+          </Link>
+          <Link className="text-[var(--ink-3)] underline" href="/check">
+            Legacy quiz UI
           </Link>
         </div>
       </div>

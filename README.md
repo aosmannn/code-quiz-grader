@@ -1,56 +1,47 @@
-# Preflight · code understanding check (iCollege course tool)
+# Preflight · understanding check before submit
 
-**Preflight** is the pre-submit check students run from **iCollege (D2L)** on the assignment — not a public website.
+**Preflight** is a research-style **submission gate**: students upload assignment code, clear a short **oral-exam interview** about *their* program, then (and only then) get cleared to turn it in for normal grading.
 
-**Student flow:** assignment link → upload *or paste* code → see in-app preview + “what we’ll ask about” → quiz → **100%** → copy clearance code → **cleared to submit**. Miss any question → fresh quiz, no penalty. Host prefers **`llama3.2:3b`** (falls back to `1b`). Real iCollege AGS passback when `LTI_TOKEN_URL` + key + line item are set.
+Understanding ≠ correctness. Those stay separate.
 
-## Try tonight (localhost)
+## Student flow (3 screens)
+
+1. **Submit code** (+ optional assignment spec)  
+2. **Understanding Check** — one question at a time, ladder: explain → reason → predict → modify → defend, cited to their lines; follow-ups up to 3  
+3. **Understanding report** — score breakdown, concepts ✓/△, clearance stamp or retry / instructor review  
+
+## Instructor
+
+| Who | Link |
+| --- | --- |
+| Student | http://127.0.0.1:43127/ |
+| Lab presets | http://127.0.0.1:43127/instructor |
+| Understanding sessions (audit) | http://127.0.0.1:43127/instructor/sessions |
+| TA verify clearance | http://127.0.0.1:43127/ta |
+| Legacy quiz UI | http://127.0.0.1:43127/check |
+
+## Run
 
 ```bash
 npm install
 npm run build
-npm run start
-# optional better quizzes:
+PORT=43127 npm run start
+# optional richer local model:
 ollama pull llama3.2:3b
 ```
 
-| Who | Link |
-| --- | --- |
-| **Student (home)** | [http://127.0.0.1:43127/](http://127.0.0.1:43127/) |
-| **Student one-click** | [http://127.0.0.1:43127/try](http://127.0.0.1:43127/try) |
-| **Lab preset (example)** | [http://127.0.0.1:43127/try?lab=inheritance](http://127.0.0.1:43127/try?lab=inheritance) |
-| **Instructor presets** | [http://127.0.0.1:43127/instructor](http://127.0.0.1:43127/instructor) |
-| **TA verify** | [http://127.0.0.1:43127/ta](http://127.0.0.1:43127/ta) |
-| Launch simulator | [http://127.0.0.1:43127/pilot](http://127.0.0.1:43127/pilot) |
+## Research question
 
-LTI launch redirects to `/`. `/try` auto-launches a demo session on the home page.
+> Can an AI-generated, code-specific questioning process reliably distinguish students who understand their submitted programs from those who do not?
 
-## How students run it (eventual iCollege)
+Every turn stores: question, response, expected signals, evaluation, evidence, follow-ups — see `.data/interviews.json`.
 
-1. Open the assignment in iCollege  
-2. Click the **Preflight / understanding check** link  
-3. Upload or paste the code for that lab (preview shows what we’ll ask about)  
-4. Pass the quiz at 100%, copy your clearance code if needed  
-5. Return to iCollege and submit the real assignment  
+## Architecture (MVP)
 
-## Pass rule
-
-**100% required** to clear the check (every MC correct; every free-answer full credit). Retries are unlimited and encouraging.
-
-## LTI endpoints (D2L)
-
-| Purpose | URL |
-| --- | --- |
-| OpenID Connect login | `{BASE}/lti/login` |
-| Launch / redirect | `{BASE}/lti/launch` → `/` |
-| JWKS | `{BASE}/lti/jwks` |
-| Student try link | `{BASE}/try` |
-| Dev simulator | `{BASE}/pilot` |
-
-See `.env.example` for `LTI_*` vars.
-
-## Smoke
-
-```bash
-node scripts/smoke-mock.mjs
+```
+Upload → Code analyzer (understanding map)
+      → Question ladder (from map + assignment spec)
+      → Student answers
+      → Evaluator (+ optional follow-up)
+      → Report → clearance / retry / instructor review
 ```
