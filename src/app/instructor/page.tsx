@@ -7,7 +7,6 @@ import type { LabPreset } from "@/lib/lab-presets";
 
 export default function InstructorPage() {
   const [labs, setLabs] = useState<LabPreset[]>([]);
-  const [copied, setCopied] = useState<string | null>(null);
   const base =
     typeof window !== "undefined" ? window.location.origin : "http://127.0.0.1:43127";
 
@@ -18,93 +17,47 @@ export default function InstructorPage() {
       .catch(() => setLabs([]));
   }, []);
 
-  const copyLink = async (labId: string) => {
-    const url = `${base}/try?lab=${encodeURIComponent(labId)}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(labId);
-      window.setTimeout(() => setCopied(null), 2000);
-    } catch {
-      /* ignore */
-    }
-  };
-
   return (
     <main className="pf-shell">
-      <div className="mx-auto max-w-2xl px-5 py-12 sm:py-16">
-        <p className="pf-kicker">Instructor</p>
-        <h1 className="mt-2 text-[2.4rem] font-extrabold tracking-tight text-[var(--ink)]">
-          Lab presets
+      <div className="mx-auto max-w-xl px-5 py-12 sm:py-16">
+        <h1 className="text-2xl font-semibold tracking-tight text-[var(--ink)]">
+          Lab links
         </h1>
-        <p className="mt-3 max-w-xl text-[1.02rem] leading-relaxed text-[var(--ink-2)]">
-          Pick a lab. Students click one link — no API keys, no knobs. Their
-          code goes on stage, they clear a briefing, get stamped. TAs verify
-          the code.
+        <p className="mt-2 text-[1.02rem] leading-relaxed text-[var(--ink-2)]">
+          Share one of these links with your class. Students upload their work,
+          answer a few questions, and get cleared to submit — no setup on their
+          side.
         </p>
 
-        <div className="mt-8 space-y-4">
+        <div className="mt-8 space-y-3">
           {labs.map((lab) => (
             <div key={lab.id} className="pf-panel">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-semibold tracking-tight">
-                    {lab.title}
-                  </h2>
-                  <p className="mt-1 text-sm text-[var(--ink-3)]">
-                    {lab.courseHint}
-                  </p>
-                  <p className="mt-2 text-sm text-[var(--ink-2)]">{lab.blurb}</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    className="h-9"
-                    onClick={() => void copyLink(lab.id)}
-                  >
-                    {copied === lab.id ? "Copied" : "Copy student link"}
-                  </Button>
-                  <Button type="button" variant="outline" className="h-9" asChild>
-                    <Link href={`/try?lab=${lab.id}`}>Open as student</Link>
-                  </Button>
-                </div>
-              </div>
-              <div className="mt-4">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-3)]">
-                  Goals baked into the quiz
-                </p>
-                <ul className="mt-2 space-y-1 text-sm text-[var(--ink-2)]">
-                  {lab.goals.map((g) => (
-                    <li key={g}>· {g}</li>
-                  ))}
-                </ul>
-              </div>
-              <p className="mt-3 font-mono text-[11px] text-[var(--ink-3)]">
-                {base}/try?lab={lab.id}
+              <h2 className="text-base font-semibold text-[var(--ink)]">
+                {lab.title}
+              </h2>
+              <p className="mt-1 text-sm text-[var(--ink-2)]">{lab.blurb}</p>
+              <p className="mt-3 break-all text-sm text-[var(--brand)]">
+                <Link href={`/try?lab=${lab.id}`} className="underline">
+                  {base}/try?lab={lab.id}
+                </Link>
               </p>
             </div>
           ))}
         </div>
 
-        <div className="mt-10 flex flex-wrap gap-3 text-sm">
-          <Link className="font-semibold text-[var(--brand)] underline" href="/ta">
-            TA verify clearances →
+        <p className="mt-10 text-sm text-[var(--ink-2)]">
+          <Link href="/ta" className="text-[var(--brand)] underline">
+            Check a student clearance
           </Link>
-          <Link
-            className="font-semibold text-[var(--brand)] underline"
-            href="/instructor/sessions"
-          >
-            Understanding sessions →
+          {" · "}
+          <Link href="/instructor/sessions" className="text-[var(--brand)] underline">
+            View understanding sessions
           </Link>
-          <Link className="text-[var(--ink-3)] underline" href="/pilot">
-            Launch simulator
-          </Link>
-          <Link className="text-[var(--ink-3)] underline" href="/">
+          {" · "}
+          <Link href="/" className="underline">
             Student home
           </Link>
-          <Link className="text-[var(--ink-3)] underline" href="/check">
-            Legacy quiz UI
-          </Link>
-        </div>
+        </p>
       </div>
     </main>
   );

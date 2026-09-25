@@ -57,21 +57,20 @@ export default function TaPage() {
 
   return (
     <main className="pf-shell">
-      <div className="mx-auto max-w-xl px-5 py-12 sm:py-16">
-        <p className="text-sm font-medium text-[var(--ink-3)]">Teaching assistant</p>
-        <h1 className="mt-2 text-[2rem] font-semibold tracking-tight">
-          Verify clearance
+      <div className="mx-auto max-w-lg px-5 py-12 sm:py-16">
+        <h1 className="text-2xl font-semibold tracking-tight text-[var(--ink)]">
+          Check a clearance
         </h1>
-        <p className="mt-3 text-[1.02rem] leading-relaxed text-[var(--ink-2)]">
-          Student shows you a clearance code after Preflight. Paste it here to
-          see who passed, when, and which files they used — no API keys involved.
+        <p className="mt-2 text-[1.02rem] leading-relaxed text-[var(--ink-2)]">
+          Paste the code a student shows you after they finish Preflight. You’ll
+          see their name, time, and files.
         </p>
 
         <div className="pf-panel mt-8 space-y-3">
-          <label className="block text-[12px] font-semibold text-[var(--ink-2)]">
+          <label className="block text-sm font-medium text-[var(--ink)]">
             Clearance code
           </label>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex gap-2">
             <Input
               value={code}
               onChange={(e) => setCode(e.target.value)}
@@ -87,95 +86,80 @@ export default function TaPage() {
               disabled={busy || !code.trim()}
               onClick={() => void lookup()}
             >
-              {busy ? "Checking…" : "Verify"}
+              {busy ? "Checking…" : "Check"}
             </Button>
           </div>
           {error && <div className="pf-err">{error}</div>}
         </div>
 
         {hit && (
-          <div className="pf-panel mt-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--green)]">
+          <div className="pf-panel mt-4 space-y-3">
+            <p className="text-sm font-medium text-[var(--green)]">
               Cleared · {hit.understandingPct}%
             </p>
-            <h2 className="mt-1 text-xl font-semibold tracking-tight">
-              {hit.userName}
-            </h2>
-            <p className="mt-1 text-sm text-[var(--ink-2)]">
-              {hit.assignmentTitle}
-              <br />
-              {hit.courseTitle}
-              {hit.labId ? ` · lab:${hit.labId}` : ""}
-            </p>
-            <p className="mt-3 font-mono text-xs text-[var(--ink-3)]">
-              {hit.code}
-              <br />
-              {new Date(hit.submittedAt).toLocaleString()}
-              {hit.mode === "ags" ? " · iCollege passback" : " · local / stub"}
-              {hit.isDevSim ? " · demo launch" : ""}
-            </p>
-            <div className="mt-4">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-3)]">
-                Files
+            <div>
+              <p className="text-lg font-semibold text-[var(--ink)]">
+                {hit.userName}
               </p>
-              <ul className="mt-1 space-y-1 font-mono text-[12px] text-[var(--ink-2)]">
+              <p className="mt-1 text-sm text-[var(--ink-2)]">
+                {hit.assignmentTitle}
+              </p>
+              <p className="text-sm text-[var(--ink-3)]">{hit.courseTitle}</p>
+            </div>
+            <p className="text-sm text-[var(--ink-2)]">
+              {new Date(hit.submittedAt).toLocaleString()}
+            </p>
+            <div>
+              <p className="text-sm font-medium text-[var(--ink)]">Files</p>
+              <ul className="mt-1 space-y-1 text-sm text-[var(--ink-2)]">
                 {hit.fileNames.map((n) => (
                   <li key={n}>{n}</li>
                 ))}
               </ul>
-              <p className="mt-2 font-mono text-[10px] text-[var(--ink-3)]">
-                fingerprint {hit.fileFingerprint}
-              </p>
             </div>
           </div>
         )}
 
         {recent.length > 0 && (
           <div className="mt-10">
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-sm font-semibold text-[var(--ink)]">
-                Recent clearances
-              </p>
-              <button
-                type="button"
-                className="text-xs font-semibold text-[var(--brand)] underline"
-                onClick={refreshRecent}
-              >
-                Refresh
-              </button>
-            </div>
+            <p className="mb-3 text-sm font-medium text-[var(--ink)]">
+              Recent clearances
+            </p>
             <ul className="space-y-2">
-              {recent.slice(0, 12).map((c) => (
-                <li
-                  key={c.code}
-                  className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm hover:border-[var(--brand)]/40"
-                  onClick={() => {
-                    setCode(c.code);
-                    setHit(c);
-                    setError(null);
-                  }}
-                >
-                  <span className="truncate font-medium">{c.userName}</span>
-                  <span className="shrink-0 font-mono text-[11px] text-[var(--ink-3)]">
-                    {c.code.slice(0, 14)}…
-                  </span>
+              {recent.slice(0, 8).map((c) => (
+                <li key={c.code}>
+                  <button
+                    type="button"
+                    className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2.5 text-left text-sm hover:bg-[var(--paper)]"
+                    onClick={() => {
+                      setCode(c.code);
+                      setHit(c);
+                      setError(null);
+                    }}
+                  >
+                    <span className="font-medium text-[var(--ink)]">
+                      {c.userName}
+                    </span>
+                    <span className="mt-0.5 block text-[var(--ink-3)]">
+                      {c.assignmentTitle} ·{" "}
+                      {new Date(c.submittedAt).toLocaleString()}
+                    </span>
+                  </button>
                 </li>
               ))}
             </ul>
           </div>
         )}
 
-        <div className="mt-10 flex flex-wrap gap-3 text-sm">
-          <Link
-            className="font-semibold text-[var(--brand)] underline"
-            href="/instructor"
-          >
-            ← Lab presets
+        <p className="mt-10 text-sm text-[var(--ink-2)]">
+          <Link href="/instructor" className="text-[var(--brand)] underline">
+            Lab links
           </Link>
-          <Link className="text-[var(--ink-3)] underline" href="/">
+          {" · "}
+          <Link href="/" className="underline">
             Student home
           </Link>
-        </div>
+        </p>
       </div>
     </main>
   );

@@ -318,12 +318,13 @@ export function UnderstandingGate() {
   return (
     <div className="mx-auto max-w-[560px] px-5 pb-28 pt-10 sm:pt-14">
       <header className="pf-hero mb-8">
-        <p className="pf-kicker">Understanding before grading</p>
-        <h1 className="pf-brand mt-2">Preflight</h1>
-        <p className="mt-5 max-w-[28rem] text-[1.05rem] font-medium leading-[1.55] text-[var(--ink-2)]">
-          Submit your code. Clear a short oral-style interview about{" "}
-          <em className="not-italic text-[var(--ink)]">your</em> program. Then —
-          and only then — you’re allowed to turn it in for grading.
+        <p className="text-sm font-medium text-[var(--brand)]">Preflight</p>
+        <h1 className="mt-2 text-[2.4rem] font-semibold tracking-tight text-[var(--ink)]">
+          Before you submit
+        </h1>
+        <p className="mt-5 max-w-[28rem] text-[1.05rem] leading-[1.55] text-[var(--ink-2)]">
+          Upload the code for this assignment, answer a few questions about it,
+          and get cleared to submit. No API key needed.
         </p>
 
         <div className="mt-5 border border-[var(--line)] bg-[var(--surface)] px-3.5 py-2.5">
@@ -340,12 +341,12 @@ export function UnderstandingGate() {
           <div className="flex justify-between font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--ink-3)]">
             <span>
               {screen === "upload"
-                ? "1 · Submit code"
+                ? "Step 1 of 3 · Upload"
                 : screen === "interview"
-                  ? "2 · Understanding check"
-                  : "3 · Understanding report"}
+                  ? "Step 2 of 3 · Questions"
+                  : "Step 3 of 3 · Results"}
             </span>
-            <span>not a grade yet</span>
+            <span className="text-[11px] text-[var(--ink-3)]">no API key</span>
           </div>
           <div className="pf-runway" aria-hidden>
             {(["upload", "interview", "report"] as Screen[]).map((s, i) => (
@@ -391,12 +392,12 @@ export function UnderstandingGate() {
               }}
               className={cn("pf-drop", dragOver && "over")}
             >
-              <p className="mb-2 text-[1.25rem] font-bold tracking-tight">
-                Upload Code
-              </p>
-              <span className="text-sm text-[var(--ink-3)]">
-                .c · .java · .py — the files you wrote for this assignment
-              </span>
+                    <p className="mb-2 text-[1.15rem] font-semibold tracking-tight">
+                      Upload your files
+                    </p>
+                    <span className="text-sm text-[var(--ink-3)]">
+                      Drag and drop, or click to browse
+                    </span>
             </div>
             <input
               ref={fileInputRef}
@@ -458,7 +459,7 @@ export function UnderstandingGate() {
                 disabled={busy}
                 onClick={loadSample}
               >
-                Use sample
+                Try a sample file
               </Button>
             </div>
             {busy && (
@@ -481,9 +482,9 @@ export function UnderstandingGate() {
 
           {mapPreview && (
             <div className="pf-panel">
-              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--ink-3)]">
-                Understanding map
-              </p>
+                <p className="font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--ink-3)]">
+                  Topics from your code
+                </p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {mapPreview.concepts.map((c) => (
                   <span

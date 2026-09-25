@@ -79,12 +79,14 @@ export default function TryPageInner() {
   return (
     <main className="pf-shell">
       <div className="mx-auto max-w-md px-5 py-20 text-center">
-        <p className="pf-brand mb-4">Preflight</p>
-        <p className="mb-2 text-[var(--ink-2)]">
-          {lab ? `Opening ${lab.title}…` : "Opening your briefing…"}
+        <p className="text-2xl font-semibold tracking-tight text-[var(--ink)]">
+          Preflight
+        </p>
+        <p className="mt-4 mb-2 text-[var(--ink-2)]">
+          {lab ? `Opening ${lab.title}…` : "Opening your check…"}
         </p>
         <p className="mb-8 text-sm text-[var(--ink-3)]">
-          No API key. Your code is the quiz. Pass once → stamped to submit.
+          No setup needed — you’ll upload your code and answer a few questions.
         </p>
         <Button
           type="button"
@@ -92,7 +94,7 @@ export default function TryPageInner() {
           disabled={busy}
           onClick={() => launch()}
         >
-          {busy ? "Launching…" : "Start check"}
+          {busy ? "Opening…" : "Start"}
         </Button>
       </div>
     </main>

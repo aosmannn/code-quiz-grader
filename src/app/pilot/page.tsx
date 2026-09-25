@@ -122,25 +122,18 @@ export default function PilotPage() {
           </Button>
         </div>
 
-        <p className="mt-6 text-sm text-[var(--ink-3)]">
-          Share a student link from{" "}
-          <a className="font-semibold text-[var(--brand)] underline" href="/instructor">
-            /instructor
+        <p className="mt-6 text-sm text-[var(--ink-2)]">
+          <a className="text-[var(--brand)] underline" href="/instructor">
+            Lab links
           </a>
-          . TAs verify codes at{" "}
-          <a className="font-semibold text-[var(--brand)] underline" href="/ta">
-            /ta
+          {" · "}
+          <a className="text-[var(--brand)] underline" href="/ta">
+            Check a clearance
           </a>
-          .
-        </p>
-
-        <p className="mt-6 text-sm text-[var(--ink-3)]">
-          Real D2L registration uses{" "}
-          <code className="rounded bg-[var(--surface)] px-1">/lti/login</code>,{" "}
-          <code className="rounded bg-[var(--surface)] px-1">/lti/launch</code>,
-          and{" "}
-          <code className="rounded bg-[var(--surface)] px-1">/lti/jwks</code> —
-          see the README and store docs.
+          {" · "}
+          <a className="underline" href="/">
+            Student home
+          </a>
         </p>
       </div>
     </main>

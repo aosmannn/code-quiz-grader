@@ -162,12 +162,12 @@ function SessionsInner() {
   return (
     <main className="pf-shell">
       <div className="mx-auto max-w-2xl px-5 py-12 sm:py-16">
-        <p className="pf-kicker">Instructor</p>
-        <h1 className="mt-2 text-[2.2rem] font-extrabold tracking-tight">
+        <h1 className="mt-2 text-[2rem] font-semibold tracking-tight">
           {assignmentTitle}
         </h1>
-        <p className="mt-2 font-mono text-[12px] text-[var(--ink-3)]">
-          Understanding demonstrations · auditable AI assessments
+        <p className="mt-2 text-[1.02rem] text-[var(--ink-2)]">
+          See who finished the understanding check, and open any student for the
+          full question history.
         </p>
 
         <div className="pf-panel mt-8 space-y-3 text-sm">

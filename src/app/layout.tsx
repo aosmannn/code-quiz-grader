@@ -1,30 +1,30 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, Syne } from "next/font/google";
+import { Source_Sans_3, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-const display = Syne({
-  variable: "--font-display",
+const sans = Source_Sans_3({
+  variable: "--font-sans",
   subsets: ["latin"],
-  weight: ["500", "600", "700", "800"],
+  weight: ["400", "500", "600", "700"],
 });
 
-const mono = IBM_Plex_Mono({
+const mono = JetBrains_Mono({
   variable: "--font-mono",
   subsets: ["latin"],
   weight: ["400", "500"],
 });
 
 export const metadata: Metadata = {
-  title: "Preflight · understanding before submit",
+  title: "Preflight · before you submit",
   description:
-    "Submit code, clear a code-specific understanding interview, then turn in for grading.",
+    "Upload your lab code, answer a few questions about it, and get cleared to submit.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${display.variable} ${mono.variable} h-full antialiased`}
+      className={`${sans.variable} ${mono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-[var(--paper)] font-sans text-[var(--ink)]">
         {children}
