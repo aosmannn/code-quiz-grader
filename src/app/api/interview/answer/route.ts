@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { followUpPrompt } from "@/lib/interview-ladder";
 import {
   aggregateUnderstanding,
-  evaluateAnswer,
+  evaluateAnswerSmart,
 } from "@/lib/interview-eval";
 import {
   getInterview,
@@ -72,7 +72,11 @@ export async function POST(req: Request) {
     }
 
     const isFollowUp = Boolean(session.pendingFollowUp);
-    const evaluation = evaluateAnswer(current, answer);
+    const evaluation = await evaluateAnswerSmart(
+      current,
+      answer,
+      session.assignmentSpec,
+    );
 
     const turn: AuditTurn = {
       questionId: current.id,
@@ -117,6 +121,8 @@ export async function POST(req: Request) {
           demonstrated: evaluation.demonstrated,
           feedback: evaluation.feedback,
           evidence: evaluation.evidence,
+          mode: evaluation.mode,
+          model: evaluation.model,
         },
         question: session.pendingFollowUp,
         progress: progress(session),
@@ -154,6 +160,8 @@ export async function POST(req: Request) {
           demonstrated: evaluation.demonstrated,
           feedback: evaluation.feedback,
           evidence: evaluation.evidence,
+          mode: evaluation.mode,
+          model: evaluation.model,
         },
         report: publicReport(session),
         session: summarize(session),
@@ -169,6 +177,8 @@ export async function POST(req: Request) {
         demonstrated: evaluation.demonstrated,
         feedback: evaluation.feedback,
         evidence: evaluation.evidence,
+        mode: evaluation.mode,
+        model: evaluation.model,
       },
       question: next,
       progress: progress(session),

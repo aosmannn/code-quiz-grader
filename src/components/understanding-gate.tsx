@@ -108,10 +108,13 @@ export function UnderstandingGate() {
   const [isFollowUp, setIsFollowUp] = useState(false);
   const [report, setReport] = useState<Report | null>(null);
   const [copied, setCopied] = useState(false);
+  const [showConcepts, setShowConcepts] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [course, setCourse] = useState<{
     userName: string;
     courseTitle: string;
     assignmentTitle: string;
+    returnUrl?: string;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -127,6 +130,7 @@ export function UnderstandingGate() {
             userName: data.session.userName,
             courseTitle: data.session.courseTitle,
             assignmentTitle: data.session.assignmentTitle,
+            returnUrl: data.session.returnUrl,
           });
           if (data.session.labId) {
             setLab(getLabPreset(data.session.labId));
@@ -695,18 +699,52 @@ export function UnderstandingGate() {
 
           <div className="flex flex-wrap gap-3">
             {report.sufficient ? (
-              <Button type="button" className="h-11 px-5" asChild>
-                <a href="/ta">Submit assignment · TA verify</a>
-              </Button>
+              submitted ? (
+                <div className="w-full border border-[var(--brand)] bg-[var(--brand-soft)] px-4 py-3 text-sm text-[var(--ink)]">
+                  Assignment unlocked for grading. Clearance{" "}
+                  <code className="font-mono text-[12px]">
+                    {report.clearanceCode}
+                  </code>{" "}
+                  is on file
+                  {course?.returnUrl ? (
+                    <>
+                      .{" "}
+                      <a
+                        className="font-semibold underline"
+                        href={course.returnUrl}
+                      >
+                        Return to course
+                      </a>
+                    </>
+                  ) : (
+                    "."
+                  )}
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  className="h-11 px-5"
+                  onClick={() => {
+                    setSubmitted(true);
+                    if (course?.returnUrl) {
+                      window.setTimeout(() => {
+                        window.location.href = course.returnUrl!;
+                      }, 1200);
+                    }
+                  }}
+                >
+                  Submit Assignment
+                </Button>
+              )
             ) : (
               <>
                 <Button
                   type="button"
                   className="h-11 px-5"
                   disabled={busy}
-                  onClick={reset}
+                  onClick={() => setShowConcepts(true)}
                 >
-                  Review & retry
+                  Review Concepts
                 </Button>
                 <Button
                   type="button"
@@ -714,19 +752,66 @@ export function UnderstandingGate() {
                   disabled={busy}
                   onClick={() => void requestReview()}
                 >
-                  Request instructor review
+                  Request Instructor Review
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={reset}
+                >
+                  Try again
                 </Button>
               </>
             )}
-            <Button type="button" variant="outline" onClick={reset}>
-              Start over
-            </Button>
+            {!submitted && (
+              <Button type="button" variant="outline" onClick={reset}>
+                Start over
+              </Button>
+            )}
           </div>
+
+          {showConcepts && !report.sufficient && (
+            <div className="pf-panel">
+              <p className="font-mono text-[11px] uppercase tracking-wide text-[var(--ink-3)]">
+                Review these concepts in your code
+              </p>
+              <ul className="mt-3 space-y-2 text-sm">
+                {(report.weakConcepts || []).map((c) => (
+                  <li key={c} className="border-b border-[var(--line)] pb-2">
+                    <strong>{c}</strong>
+                    <p className="mt-1 text-[var(--ink-2)]">
+                      Re-read the lines the interview cited for this idea, then
+                      retry the check. Instructor review is available if you
+                      believe the assessment is wrong.
+                    </p>
+                  </li>
+                ))}
+                {(report.weakConcepts || []).length === 0 && (
+                  <li className="text-[var(--ink-2)]">
+                    Open the audit trail below — strengthen answers that were
+                    marked △, then try again.
+                  </li>
+                )}
+              </ul>
+              <Button
+                type="button"
+                className="mt-4 h-10"
+                onClick={reset}
+              >
+                Retry Understanding Check
+              </Button>
+            </div>
+          )}
+
           {error && <div className="pf-err">{error}</div>}
           {sessionId && (
             <p className="font-mono text-[10px] text-[var(--ink-3)]">
               Session {sessionId} ·{" "}
-              <a className="underline" href={`/instructor/sessions?id=${sessionId}`}>
+              <a
+                className="underline"
+                href={`/instructor/sessions?id=${sessionId}`}
+              >
                 instructor view
               </a>
             </p>

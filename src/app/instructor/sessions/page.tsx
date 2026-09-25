@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -29,11 +29,19 @@ type SessionDetail = {
   threshold: number;
   fileNames: string[];
   clearanceCode?: string | null;
-  concepts: { label?: string; concept: string; status: string; bestScore: number }[];
+  concepts: {
+    label?: string;
+    concept: string;
+    status: string;
+    bestScore: number;
+  }[];
   breakdown: { label: string; pct: number }[] | null;
   map: {
     concepts: string[];
-    roots: { label: string; children: { label: string; lineStart: number; lineEnd: number }[] }[];
+    roots: {
+      label: string;
+      children: { label: string; lineStart: number; lineEnd: number }[];
+    }[];
   };
   turns: {
     level: string;
@@ -45,6 +53,8 @@ type SessionDetail = {
       demonstrated: boolean;
       feedback: string;
       evidence: string[];
+      mode?: string;
+      model?: string | null;
     };
     answeredAt: string;
     fileName: string;
@@ -86,11 +96,18 @@ function SessionsInner() {
     if (focusId) loadOne(focusId);
   }, [focusId]);
 
+  const assignmentTitle = useMemo(() => {
+    if (detail?.assignmentTitle) return detail.assignmentTitle;
+    const titles = [...new Set(list.map((s) => s.assignmentTitle))];
+    return titles[0] || "Assignment";
+  }, [list, detail]);
+
   const stats = {
     total: list.length,
-    passed: list.filter((s) => s.status === "passed").length,
+    passed: list.filter((s) => s.status === "passed" || s.sufficient).length,
     retry: list.filter((s) => s.status === "needs_retry").length,
     review: list.filter((s) => s.status === "instructor_review").length,
+    inProgress: list.filter((s) => s.status === "in_progress").length,
     avg:
       list.filter((s) => typeof s.scorePct === "number").length === 0
         ? null
@@ -102,43 +119,106 @@ function SessionsInner() {
           ),
   };
 
+  const downloadCsv = () => {
+    const header = [
+      "id",
+      "userName",
+      "assignmentTitle",
+      "courseTitle",
+      "status",
+      "scorePct",
+      "sufficient",
+      "clearanceCode",
+      "files",
+      "updatedAt",
+    ];
+    const rows = list.map((s) =>
+      [
+        s.id,
+        s.userName,
+        s.assignmentTitle,
+        s.courseTitle,
+        s.status,
+        s.scorePct ?? "",
+        s.sufficient,
+        s.clearanceCode ?? "",
+        s.fileNames.join("|"),
+        s.updatedAt,
+      ]
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+        .join(","),
+    );
+    const blob = new Blob([[header.join(","), ...rows].join("\n")], {
+      type: "text/csv",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `understanding-sessions-${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <main className="pf-shell">
       <div className="mx-auto max-w-2xl px-5 py-12 sm:py-16">
         <p className="pf-kicker">Instructor</p>
         <h1 className="mt-2 text-[2.2rem] font-extrabold tracking-tight">
-          Understanding sessions
+          {assignmentTitle}
         </h1>
-        <p className="mt-3 text-[1.02rem] text-[var(--ink-2)]">
-          Auditable evidence — questions, responses, AI evaluation — not just a
-          score.
+        <p className="mt-2 font-mono text-[12px] text-[var(--ink-3)]">
+          Understanding demonstrations · auditable AI assessments
         </p>
 
-        <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {[
-            ["Students", stats.total],
-            ["Demonstrated", stats.passed],
-            ["Retry", stats.retry],
-            ["Review", stats.review],
-          ].map(([label, n]) => (
-            <div key={String(label)} className="pf-panel py-3 text-center">
-              <p className="text-[1.5rem] font-bold">{n}</p>
-              <p className="font-mono text-[10px] uppercase text-[var(--ink-3)]">
-                {label}
-              </p>
+        <div className="pf-panel mt-8 space-y-3 text-sm">
+          <div className="flex justify-between gap-3">
+            <span className="text-[var(--ink-2)]">Students</span>
+            <span className="font-semibold">{stats.total}</span>
+          </div>
+          <div className="flex justify-between gap-3">
+            <span className="text-[var(--ink-2)]">Understanding demonstrated</span>
+            <span className="font-semibold">{stats.passed}</span>
+          </div>
+          <div className="flex justify-between gap-3">
+            <span className="text-[var(--ink-2)]">Needs another attempt</span>
+            <span className="font-semibold">{stats.retry}</span>
+          </div>
+          <div className="flex justify-between gap-3">
+            <span className="text-[var(--ink-2)]">Instructor review</span>
+            <span className="font-semibold">{stats.review}</span>
+          </div>
+          {stats.inProgress > 0 && (
+            <div className="flex justify-between gap-3">
+              <span className="text-[var(--ink-2)]">In progress</span>
+              <span className="font-semibold">{stats.inProgress}</span>
             </div>
-          ))}
+          )}
+          <div className="flex justify-between gap-3 border-t border-[var(--line)] pt-3">
+            <span className="text-[var(--ink-2)]">Average understanding</span>
+            <span className="font-semibold">
+              {stats.avg != null ? `${stats.avg}%` : "—"}
+            </span>
+          </div>
         </div>
-        {stats.avg != null && (
-          <p className="mt-3 font-mono text-[12px] text-[var(--ink-3)]">
-            Average understanding {stats.avg}%
-          </p>
-        )}
+
+        <div className="mt-6 flex flex-wrap gap-2">
+          <Button type="button" variant="outline" onClick={loadList}>
+            Refresh
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={list.length === 0}
+            onClick={downloadCsv}
+          >
+            Export CSV
+          </Button>
+        </div>
 
         <div className="mt-8 space-y-2">
           {list.length === 0 && (
             <p className="text-sm text-[var(--ink-3)]">
-              No sessions yet — run a student check from the home page.
+              No sessions yet — students start from the home page.
             </p>
           )}
           {list.map((s) => (
@@ -151,8 +231,9 @@ function SessionsInner() {
               <span>
                 <span className="font-semibold">{s.userName}</span>
                 <span className="mt-0.5 block font-mono text-[10px] text-[var(--ink-3)]">
-                  {s.assignmentTitle} · {s.status}
+                  {s.status}
                   {s.scorePct != null ? ` · ${s.scorePct}%` : ""}
+                  {s.clearanceCode ? ` · ${s.clearanceCode}` : ""}
                 </span>
               </span>
               <span className="font-mono text-[10px] text-[var(--ink-3)]">
@@ -170,10 +251,10 @@ function SessionsInner() {
               <h2 className="text-xl font-bold tracking-tight">
                 {detail.userName}
               </h2>
-              <p className="font-mono text-[12px] text-[var(--ink-3)]">
-                {detail.assignmentTitle} · {detail.courseTitle}
+              <p className="mt-1 font-mono text-[12px] text-[var(--ink-3)]">
+                Understanding: {detail.scorePct ?? "—"}%
                 <br />
-                Understanding: {detail.scorePct ?? "—"}% · {detail.status}
+                {detail.assignmentTitle} · {detail.courseTitle}
                 {detail.clearanceCode ? ` · ${detail.clearanceCode}` : ""}
               </p>
             </div>
@@ -193,13 +274,27 @@ function SessionsInner() {
               </ul>
             )}
 
+            {detail.breakdown && (
+              <ul className="space-y-1 border-t border-[var(--line)] pt-3 text-sm text-[var(--ink-2)]">
+                {detail.breakdown.map((b) => (
+                  <li key={b.label} className="flex justify-between gap-2">
+                    <span>{b.label}</span>
+                    <span className="font-mono">{b.pct}%</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
             <div>
               <p className="font-mono text-[11px] uppercase text-[var(--ink-3)]">
                 Questions
               </p>
               <ul className="mt-2 space-y-4">
                 {detail.turns.map((t, i) => (
-                  <li key={i} className="border-t border-[var(--line)] pt-3 text-sm">
+                  <li
+                    key={i}
+                    className="border-t border-[var(--line)] pt-3 text-sm"
+                  >
                     <p className="font-mono text-[10px] uppercase text-[var(--ink-3)]">
                       {t.isFollowUp ? "Follow-up" : t.level}
                       {t.evaluation.demonstrated
@@ -207,6 +302,9 @@ function SessionsInner() {
                         : " · △ Weak"}
                       {" · "}
                       {t.fileName} L{t.lineStart}–{t.lineEnd}
+                      {t.evaluation.mode
+                        ? ` · ${t.evaluation.mode}${t.evaluation.model ? `/${t.evaluation.model}` : ""}`
+                        : ""}
                     </p>
                     <p className="mt-1 font-medium">{t.prompt}</p>
                     <p className="mt-1 text-[var(--ink-2)]">“{t.response}”</p>
@@ -224,11 +322,14 @@ function SessionsInner() {
         )}
 
         <div className="mt-10 flex flex-wrap gap-3 text-sm">
-          <Button type="button" variant="outline" onClick={loadList}>
-            Refresh
-          </Button>
-          <Link className="font-semibold text-[var(--brand)] underline" href="/instructor">
+          <Link
+            className="font-semibold text-[var(--brand)] underline"
+            href="/instructor"
+          >
             ← Lab presets
+          </Link>
+          <Link className="text-[var(--ink-3)] underline" href="/ta">
+            TA verify
           </Link>
           <Link className="text-[var(--ink-3)] underline" href="/">
             Student home

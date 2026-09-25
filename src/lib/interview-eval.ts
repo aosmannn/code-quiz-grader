@@ -1,6 +1,11 @@
 import type { InterviewQuestion, UnderstandingWeights } from "@/lib/interview-ladder";
 import { DEFAULT_WEIGHTS } from "@/lib/interview-ladder";
 import type { DetectedConcept } from "@/lib/understanding-map";
+import {
+  callOllama,
+  getOllamaStatus,
+  parseModelJson,
+} from "@/lib/ollama";
 
 export type EvalResult = {
   score01: number;
@@ -9,6 +14,8 @@ export type EvalResult = {
   feedback: string;
   evidence: string[];
   conceptsHit: string[];
+  mode?: "heuristic" | "ollama" | "blend";
+  model?: string | null;
 };
 
 const STOP = new Set([
@@ -53,6 +60,7 @@ export function evaluateAnswer(
         "Too short — explain what that part of *your* program is doing, naming something concrete.",
       evidence: [],
       conceptsHit: [],
+      mode: "heuristic",
     };
   }
 
@@ -71,7 +79,6 @@ export function evaluateAnswer(
   }
   if (signalHits.length >= 2) score += 0.08;
 
-  // Concept-ish language
   const conceptWords: Record<string, RegExp> = {
     loops: /\b(loop|iterate|until|while|for each|counter)\b/i,
     arrays: /\b(array|index|element|list)\b/i,
@@ -103,7 +110,6 @@ export function evaluateAnswer(
     }
   }
 
-  // Vague filler penalty
   if (
     /^(it works|idk|i don't know|because it does|to make it work)\b/i.test(
       text,
@@ -137,7 +143,104 @@ export function evaluateAnswer(
     feedback,
     evidence,
     conceptsHit,
+    mode: "heuristic",
   };
+}
+
+/** Prefer host Ollama when available; blend with heuristic so flaky small models can’t fully override. */
+export async function evaluateAnswerSmart(
+  question: InterviewQuestion,
+  answer: string,
+  assignmentSpec?: string,
+): Promise<EvalResult> {
+  const base = evaluateAnswer(question, answer);
+  if (answer.trim().length < 12) return base;
+
+  try {
+    const status = await getOllamaStatus();
+    if (!status.ok || !status.selected) return base;
+
+    const prompt = `You are an oral-exam grader for a programming course.
+Decide if the student UNDERSTANDS the cited code (not whether the program is correct for the assignment).
+
+Return ONLY JSON:
+{"score01":0.0-1.0,"demonstrated":bool,"needsFollowUp":bool,"feedback":"1-2 sentences pointing at their code","evidence":["short quotes or reasons"]}
+
+Rules:
+- demonstrated if they show real understanding of THIS snippet (≥0.62).
+- needsFollowUp if partial (0.25–0.61) and a probing follow-up would help.
+- feedback must reference their symbols/lines when possible — never a generic lecture.
+- Be fair to imperfect English.
+
+Assignment context (may be empty):
+${(assignmentSpec || "").slice(0, 500)}
+
+Level: ${question.level}
+Concept: ${question.concept}
+File: ${question.fileName} lines ${question.lineStart}-${question.lineEnd}
+Code:
+\`\`\`
+${question.snippet.slice(0, 900)}
+\`\`\`
+
+Question:
+${question.prompt}
+
+Student answer:
+${answer.trim().slice(0, 1200)}
+`;
+
+    const raw = await callOllama({
+      model: status.selected,
+      prompt,
+      numPredict: 400,
+      timeoutMs: 45_000,
+    });
+    const parsed = parseModelJson<{
+      score01?: number;
+      demonstrated?: boolean;
+      needsFollowUp?: boolean;
+      feedback?: string;
+      evidence?: string[];
+    }>(raw);
+
+    const modelScore =
+      typeof parsed.score01 === "number" && Number.isFinite(parsed.score01)
+        ? Math.max(0, Math.min(1, parsed.score01))
+        : base.score01;
+
+    const score01 = Math.max(
+      0,
+      Math.min(1, modelScore * 0.65 + base.score01 * 0.35),
+    );
+    const demonstrated =
+      typeof parsed.demonstrated === "boolean"
+        ? score01 >= 0.62 && (parsed.demonstrated || base.demonstrated)
+        : score01 >= 0.62;
+    const needsFollowUp =
+      !demonstrated &&
+      (parsed.needsFollowUp ?? base.needsFollowUp) &&
+      score01 >= 0.22;
+
+    return {
+      score01,
+      demonstrated,
+      needsFollowUp,
+      feedback:
+        (parsed.feedback && String(parsed.feedback).trim()) || base.feedback,
+      evidence: [
+        ...((Array.isArray(parsed.evidence)
+          ? parsed.evidence
+          : []) as string[]).slice(0, 4),
+        ...base.evidence.slice(0, 2),
+      ].slice(0, 6),
+      conceptsHit: base.conceptsHit,
+      mode: "blend",
+      model: status.selected,
+    };
+  } catch {
+    return base;
+  }
 }
 
 export type ConceptStatus = {
@@ -148,7 +251,6 @@ export type ConceptStatus = {
 
 export function aggregateUnderstanding(params: {
   weights?: UnderstandingWeights;
-  /** per weightKey, list of 0–1 scores (core + follow-up best) */
   byWeight: Partial<Record<keyof UnderstandingWeights, number[]>>;
   conceptScores: Record<string, number>;
   allConcepts: string[];
@@ -186,7 +288,6 @@ export function aggregateUnderstanding(params: {
     total += avg * w[key];
   });
 
-  // Light boost from code_tracing proxy: explain scores also feed tracing
   const explain = params.byWeight.concept_explanation || [];
   if (explain.length && !(params.byWeight.code_tracing || []).length) {
     const avg = explain.reduce((a, b) => a + b, 0) / explain.length;

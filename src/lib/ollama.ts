@@ -106,6 +106,7 @@ export async function callOllama(params: {
   model: string;
   prompt: string;
   numPredict?: number;
+  timeoutMs?: number;
 }): Promise<string> {
   const resp = await fetch(`${OLLAMA_BASE}/api/generate`, {
     method: "POST",
@@ -120,7 +121,7 @@ export async function callOllama(params: {
         num_predict: params.numPredict ?? 2048,
       },
     }),
-    signal: AbortSignal.timeout(180_000),
+    signal: AbortSignal.timeout(params.timeoutMs ?? 180_000),
   });
 
   if (!resp.ok) {
