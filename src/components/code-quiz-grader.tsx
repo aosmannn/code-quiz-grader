@@ -10,6 +10,8 @@ import { SAMPLE_PROGRAM } from "@/lib/sample-program";
 import { normalizeSourceFiles } from "@/lib/mock-quiz";
 import { missCoach } from "@/lib/miss-coach";
 import { getLabPreset, type LabPreset } from "@/lib/lab-presets";
+import { LEGACY_QUIZ_ACCEPT } from "@/lib/upload-accept";
+import { ingestUploadFile } from "@/lib/ingest-upload";
 import type {
   FaAnswer,
   FaScored,
@@ -19,8 +21,7 @@ import type {
   SourceFile,
 } from "@/lib/types";
 
-const ACCEPT =
-  ".py,.js,.ts,.jsx,.tsx,.java,.c,.cpp,.cs,.go,.rb,.rs,.txt,.html,.css,.php,.swift,.kt,.r,.m,.sh,.json,.xml,.yaml,.yml,.sql,.lua,.scala,.h";
+const ACCEPT = LEGACY_QUIZ_ACCEPT;
 
 const DEFAULT_MC = 4;
 const DEFAULT_FA = 2;
@@ -297,13 +298,22 @@ export function CodeQuizGrader() {
 
   const readFiles = async (list: FileList | File[]) => {
     const arr = Array.from(list);
-    const next = [...files];
-    for (const f of arr) {
-      if (next.some((x) => x.name === f.name)) continue;
-      const content = await f.text();
-      next.push({ name: f.name, size: f.size, content });
+    if (arr.length === 0) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const next = [...files];
+      for (const f of arr) {
+        if (next.some((x) => x.name === f.name)) continue;
+        const ingested = await ingestUploadFile(f, "legacy");
+        next.push(ingested);
+      }
+      setFilesReady(next);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not read that file.");
+    } finally {
+      setBusy(false);
     }
-    setFilesReady(next);
   };
 
   const applyPaste = () => {

@@ -9,9 +9,10 @@ import { normalizeSourceFiles } from "@/lib/mock-quiz";
 import { getLabPreset, type LabPreset } from "@/lib/lab-presets";
 import { SAMPLE_PROGRAM } from "@/lib/sample-program";
 import { CONCEPT_LABELS } from "@/lib/understanding-map";
+import { SOURCE_ACCEPT } from "@/lib/upload-accept";
+import { ingestUploadFile } from "@/lib/ingest-upload";
 
-const ACCEPT =
-  ".py,.js,.ts,.jsx,.tsx,.java,.c,.cpp,.cs,.go,.rb,.rs,.txt,.h";
+const ACCEPT = SOURCE_ACCEPT;
 
 type Screen = "upload" | "interview" | "report";
 
@@ -166,13 +167,22 @@ export function UnderstandingGate() {
 
   const readFiles = async (list: FileList | File[]) => {
     const arr = Array.from(list);
-    const next = [...files];
-    for (const f of arr) {
-      if (next.some((x) => x.name === f.name)) continue;
-      const content = await f.text();
-      next.push({ name: f.name, size: f.size, content });
+    if (arr.length === 0) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const next = [...files];
+      for (const f of arr) {
+        if (next.some((x) => x.name === f.name)) continue;
+        const ingested = await ingestUploadFile(f, "source");
+        next.push(ingested);
+      }
+      setFilesReady(next);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not read that file.");
+    } finally {
+      setBusy(false);
     }
-    setFilesReady(next);
   };
 
   const loadSample = () => {
@@ -396,7 +406,7 @@ export function UnderstandingGate() {
                       Upload your files
                     </p>
                     <span className="text-sm text-[var(--ink-3)]">
-                      Drag and drop, or click to browse
+                      Source code, PDF, or Word (.docx)
                     </span>
             </div>
             <input
