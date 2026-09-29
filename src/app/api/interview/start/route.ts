@@ -80,9 +80,11 @@ export async function POST(req: Request) {
 
     const current = session.pendingFollowUp || session.coreQuestions[0];
 
+    const isDoc = map.kind === "document";
     return NextResponse.json({
       sessionId: session.id,
       map: {
+        kind: map.kind,
         concepts: map.concepts,
         files: map.files,
         roots: map.roots.map((r) => ({
@@ -102,8 +104,9 @@ export async function POST(req: Request) {
         followUpsUsed: 0,
         maxFollowUps: 3,
       },
-      message:
-        "Your code has been submitted for an Understanding Check. Not graded yet.",
+      message: isDoc
+        ? "Your paper has been submitted for an Understanding Check. Not graded yet."
+        : "Your code has been submitted for an Understanding Check. Not graded yet.",
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Start failed";

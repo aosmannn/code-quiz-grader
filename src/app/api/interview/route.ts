@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getInterview, listInterviews } from "@/lib/interview-store";
-import { CONCEPT_LABELS } from "@/lib/understanding-map";
+import { conceptLabel } from "@/lib/understanding-map";
 
 export const runtime = "nodejs";
 
@@ -31,9 +31,7 @@ export async function GET(req: Request) {
         breakdown: session.breakdown,
         concepts: (session.concepts || []).map((c) => ({
           ...c,
-          label:
-            CONCEPT_LABELS[c.concept as keyof typeof CONCEPT_LABELS] ||
-            c.concept,
+          label: conceptLabel(c.concept),
         })),
         clearanceCode: session.clearanceCode,
         followUpsUsed: session.followUpsUsed,

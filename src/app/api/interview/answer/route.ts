@@ -10,7 +10,7 @@ import {
   type AuditTurn,
 } from "@/lib/interview-store";
 import { saveClearance } from "@/lib/clearance-store";
-import { CONCEPT_LABELS } from "@/lib/understanding-map";
+import { conceptLabel } from "@/lib/understanding-map";
 
 export const runtime = "nodejs";
 
@@ -72,10 +72,13 @@ export async function POST(req: Request) {
     }
 
     const isFollowUp = Boolean(session.pendingFollowUp);
+    const submissionKind =
+      session.map?.kind === "document" ? "document" : "code";
     const evaluation = await evaluateAnswerSmart(
       current,
       answer,
       session.assignmentSpec,
+      submissionKind,
     );
 
     const turn: AuditTurn = {
@@ -112,7 +115,11 @@ export async function POST(req: Request) {
       session.followUpsUsed < session.maxFollowUps
     ) {
       session.followUpsUsed += 1;
-      session.pendingFollowUp = followUpPrompt(current, answer);
+      session.pendingFollowUp = followUpPrompt(
+        current,
+        answer,
+        submissionKind,
+      );
       await saveInterview(session);
       return NextResponse.json({
         done: false,
@@ -230,16 +237,12 @@ function publicReport(session: NonNullable<Awaited<ReturnType<typeof getIntervie
     breakdown: session.breakdown,
     concepts: (session.concepts || []).map((c) => ({
       ...c,
-      label:
-        CONCEPT_LABELS[c.concept as keyof typeof CONCEPT_LABELS] || c.concept,
+      label: conceptLabel(c.concept),
     })),
     clearanceCode: session.clearanceCode,
     weakConcepts: (session.concepts || [])
       .filter((c) => c.status !== "demonstrated")
-      .map(
-        (c) =>
-          CONCEPT_LABELS[c.concept as keyof typeof CONCEPT_LABELS] || c.concept,
-      ),
+      .map((c) => conceptLabel(c.concept)),
     turns: session.turns.map((t) => ({
       questionId: t.questionId,
       level: t.question.level,

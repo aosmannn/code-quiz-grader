@@ -1,6 +1,6 @@
 import type { InterviewQuestion, UnderstandingWeights } from "@/lib/interview-ladder";
 import { DEFAULT_WEIGHTS } from "@/lib/interview-ladder";
-import type { DetectedConcept } from "@/lib/understanding-map";
+import type { DetectedConcept, SubmissionKind } from "@/lib/understanding-map";
 import {
   callOllama,
   getOllamaStatus,
@@ -45,9 +45,11 @@ const STOP = new Set([
 export function evaluateAnswer(
   question: InterviewQuestion,
   answer: string,
+  kind: SubmissionKind = "code",
 ): EvalResult {
   const text = answer.trim();
   const lower = text.toLowerCase();
+  const isDoc = kind === "document";
   const evidence: string[] = [];
   const conceptsHit: string[] = [];
 
@@ -128,10 +130,14 @@ export function evaluateAnswer(
   if (demonstrated) {
     feedback =
       evidence.length > 0
-        ? `Solid — I can see you connecting the answer to your code (${evidence.slice(0, 2).join("; ")}).`
+        ? isDoc
+          ? `Solid — I can see you connecting the answer to your paper (${evidence.slice(0, 2).join("; ")}).`
+          : `Solid — I can see you connecting the answer to your code (${evidence.slice(0, 2).join("; ")}).`
         : "Solid — enough specificity to count as demonstrated.";
   } else if (needsFollowUp) {
-    feedback = `Partial. Look at lines ${question.lineStart}–${question.lineEnd} again and name a concrete symbol or step.`;
+    feedback = isDoc
+      ? `Partial. Look at lines ${question.lineStart}–${question.lineEnd} again and name a concrete claim, source, or sentence.`
+      : `Partial. Look at lines ${question.lineStart}–${question.lineEnd} again and name a concrete symbol or step.`;
   } else {
     feedback = `Not demonstrated yet. Your answer doesn’t clearly engage lines ${question.lineStart}–${question.lineEnd} of \`${question.fileName}\`.`;
   }
@@ -152,15 +158,47 @@ export async function evaluateAnswerSmart(
   question: InterviewQuestion,
   answer: string,
   assignmentSpec?: string,
+  kind: SubmissionKind = "code",
 ): Promise<EvalResult> {
-  const base = evaluateAnswer(question, answer);
+  const base = evaluateAnswer(question, answer, kind);
   if (answer.trim().length < 12) return base;
 
   try {
     const status = await getOllamaStatus();
     if (!status.ok || !status.selected) return base;
 
-    const prompt = `You are an oral-exam grader for a programming course.
+    const isDoc = kind === "document";
+    const prompt = isDoc
+      ? `You are an oral-exam grader for a writing / humanities course.
+Decide if the student UNDERSTANDS the cited section of their paper (not whether the essay is perfect).
+
+Return ONLY JSON:
+{"score01":0.0-1.0,"demonstrated":bool,"needsFollowUp":bool,"feedback":"1-2 sentences pointing at their paper","evidence":["short quotes or reasons"]}
+
+Rules:
+- demonstrated if they show real understanding of THIS section (≥0.62).
+- needsFollowUp if partial (0.25–0.61) and a probing follow-up would help.
+- feedback must reference their claims, names, sources, or sentences — never CS topics like loops or inheritance.
+- Be fair to imperfect English.
+
+Assignment context (may be empty):
+${(assignmentSpec || "").slice(0, 500)}
+
+Level: ${question.level}
+Topic: ${question.concept}
+File: ${question.fileName} lines ${question.lineStart}-${question.lineEnd}
+Passage:
+\`\`\`
+${question.snippet.slice(0, 900)}
+\`\`\`
+
+Question:
+${question.prompt}
+
+Student answer:
+${answer.trim().slice(0, 1200)}
+`
+      : `You are an oral-exam grader for a programming course.
 Decide if the student UNDERSTANDS the cited code (not whether the program is correct for the assignment).
 
 Return ONLY JSON:

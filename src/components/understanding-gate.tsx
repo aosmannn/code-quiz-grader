@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { normalizeSourceFiles } from "@/lib/mock-quiz";
 import { getLabPreset, type LabPreset } from "@/lib/lab-presets";
 import { SAMPLE_PROGRAM } from "@/lib/sample-program";
-import { CONCEPT_LABELS } from "@/lib/understanding-map";
+import { conceptLabel, type SubmissionKind } from "@/lib/understanding-map";
 import { SOURCE_ACCEPT } from "@/lib/upload-accept";
 import { ingestUploadFile } from "@/lib/ingest-upload";
 
@@ -62,6 +62,7 @@ type Report = {
 };
 
 type MapPreview = {
+  kind?: SubmissionKind;
   concepts: string[];
   files: { name: string; lineCount: number }[];
   roots: {
@@ -102,6 +103,9 @@ export function UnderstandingGate() {
   const [error, setError] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [mapPreview, setMapPreview] = useState<MapPreview | null>(null);
+  const [submissionKind, setSubmissionKind] =
+    useState<SubmissionKind>("code");
+  const isDoc = submissionKind === "document";
   const [question, setQuestion] = useState<Question | null>(null);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [answer, setAnswer] = useState("");
@@ -198,7 +202,7 @@ export function UnderstandingGate() {
 
   const startInterview = async () => {
     if (files.length === 0) {
-      setError("Upload your assignment code first.");
+      setError("Upload your assignment file first.");
       return;
     }
     setBusy(true);
@@ -221,6 +225,9 @@ export function UnderstandingGate() {
       if (!res.ok) throw new Error(data.error || "Could not start check");
       setSessionId(data.sessionId);
       setMapPreview(data.map);
+      setSubmissionKind(
+        data.map?.kind === "document" ? "document" : "code",
+      );
       setQuestion(data.question);
       setProgress(data.progress);
       setAnswer("");
@@ -301,6 +308,7 @@ export function UnderstandingGate() {
     setAnswer("");
     setLastFeedback(null);
     setMapPreview(null);
+    setSubmissionKind("code");
     setError(null);
   };
 
@@ -445,7 +453,7 @@ export function UnderstandingGate() {
                 rows={4}
                 value={assignmentSpec}
                 onChange={(e) => setAssignmentSpec(e.target.value)}
-                placeholder="Paste the assignment prompt — so questions stay about understanding your code, not whether it meets every requirement."
+                placeholder="Paste the assignment prompt — so questions stay about understanding your work, not whether it meets every requirement."
                 className="rounded-sm text-sm"
               />
               <p className="mt-1.5 text-[12px] text-[var(--ink-3)]">
@@ -485,7 +493,7 @@ export function UnderstandingGate() {
       {screen === "interview" && question && (
         <section className="space-y-4">
           <div className="border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-sm text-[var(--ink-2)]">
-            Your code has been submitted for an{" "}
+            {isDoc ? "Your paper" : "Your code"} has been submitted for an{" "}
             <strong className="text-[var(--ink)]">Understanding Check</strong>.
             Not graded yet.
           </div>
@@ -493,7 +501,7 @@ export function UnderstandingGate() {
           {mapPreview && (
             <div className="pf-panel">
                 <p className="font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--ink-3)]">
-                  Topics from your code
+                  {isDoc ? "Topics from your paper" : "Topics from your code"}
                 </p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {mapPreview.concepts.map((c) => (
@@ -501,7 +509,7 @@ export function UnderstandingGate() {
                     key={c}
                     className="border border-[var(--line)] bg-white px-2 py-0.5 font-mono text-[11px]"
                   >
-                    {CONCEPT_LABELS[c as keyof typeof CONCEPT_LABELS] || c}
+                    {conceptLabel(c)}
                   </span>
                 ))}
               </div>
@@ -552,7 +560,9 @@ export function UnderstandingGate() {
                   {question.fileName} · lines {question.lineStart}–
                   {question.lineEnd}
                 </span>
-                <span className="text-[var(--signal)]">your code</span>
+                <span className="text-[var(--signal)]">
+                  {isDoc ? "this section" : "your code"}
+                </span>
               </div>
               <pre className="relative z-[1] max-h-40 overflow-auto p-3 font-mono text-[11px] leading-relaxed text-[var(--code-fg)] whitespace-pre-wrap">
                 {question.snippet}
@@ -785,16 +795,18 @@ export function UnderstandingGate() {
           {showConcepts && !report.sufficient && (
             <div className="pf-panel">
               <p className="font-mono text-[11px] uppercase tracking-wide text-[var(--ink-3)]">
-                Review these concepts in your code
+                {isDoc
+                  ? "Review these topics in your paper"
+                  : "Review these concepts in your code"}
               </p>
               <ul className="mt-3 space-y-2 text-sm">
                 {(report.weakConcepts || []).map((c) => (
                   <li key={c} className="border-b border-[var(--line)] pb-2">
                     <strong>{c}</strong>
                     <p className="mt-1 text-[var(--ink-2)]">
-                      Re-read the lines the interview cited for this idea, then
-                      retry the check. Instructor review is available if you
-                      believe the assessment is wrong.
+                      {isDoc
+                        ? "Re-read the section the interview cited for this idea, then retry the check. Instructor review is available if you believe the assessment is wrong."
+                        : "Re-read the lines the interview cited for this idea, then retry the check. Instructor review is available if you believe the assessment is wrong."}
                     </p>
                   </li>
                 ))}
